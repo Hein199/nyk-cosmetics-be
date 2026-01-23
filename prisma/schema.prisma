@@ -1,0 +1,238 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  ADMIN
+  SALESPERSON
+}
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum ProductCategory {
+  COSMETIC
+  SKINCARE
+  ACCESSORY
+  OTHER
+}
+
+enum OrderStatus {
+  PENDING_ADMIN
+  CONFIRMED
+  CANCELLED
+  DELIVERED
+}
+
+enum PaymentType {
+  CASH
+  BANK
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+}
+
+enum LoanStatus {
+  OPEN
+  CLOSED
+}
+
+enum LedgerType {
+  DEBIT
+  CREDIT
+}
+
+enum LedgerCategory {
+  SALE
+  SALARY
+  EXPENSE
+  OTHER_INCOME
+}
+
+model User {
+  id            String        @id @default(uuid()) @db.Uuid
+  username      String        @unique
+  password_hash String
+  role          Role
+
+  salesperson   Salesperson?
+  orders        Order[]       @relation("SalespersonOrders")
+  payments      Payment[]     @relation("PaymentCollectedBy")
+
+  @@index([role])
+}
+
+model Salesperson {
+  id             String  @id @default(uuid()) @db.Uuid
+  user_id        String  @unique @db.Uuid
+  name           String
+  monthly_target Decimal @db.Decimal(12, 2)
+
+  user User @relation(fields: [user_id], references: [id])
+}
+
+model Customer {
+  id           String         @id @default(uuid()) @db.Uuid
+  name         String
+  phone_number String
+  address      String
+  status       CustomerStatus
+
+  orders   Order[]
+  payments Payment[]
+  loans    Loan[]
+
+  @@index([phone_number])
+}
+
+model Product {
+  id            String          @id @default(uuid()) @db.Uuid
+  name          String
+  category      ProductCategory
+  unit_price    Decimal         @db.Decimal(12, 2)
+  pcs_per_dozen Decimal         @default(12) @db.Decimal(12, 2)
+  pcs_per_pack  Decimal         @default(12) @db.Decimal(12, 2)
+  photo_url     String
+  is_active     Boolean         @default(true)
+
+  inventory  Inventory?
+  orderItems OrderItem[]
+
+  @@index([category])
+  @@index([is_active])
+}
+
+model Inventory {
+  product_id String @id @db.Uuid
+  quantity   Int
+
+  product Product @relation(fields: [product_id], references: [id])
+}
+
+model Order {
+  id                   String      @id @default(uuid()) @db.Uuid
+  customer_id          String      @db.Uuid
+  salesperson_user_id  String      @db.Uuid
+  total_amount         Decimal     @db.Decimal(12, 2)
+  status               OrderStatus
+  created_at           DateTime    @default(now())
+
+  customer    Customer @relation(fields: [customer_id], references: [id])
+  salesperson User     @relation("SalespersonOrders", fields: [salesperson_user_id], references: [id])
+  items       OrderItem[]
+  loan        Loan?
+  payments    Payment[]
+
+  @@index([customer_id])
+  @@index([salesperson_user_id])
+  @@index([status])
+}
+
+model OrderItem {
+  id         String  @id @default(uuid()) @db.Uuid
+  order_id   String  @db.Uuid
+  product_id String  @db.Uuid
+  quantity   Int
+  unit_price Decimal @db.Decimal(12, 2)
+
+  order   Order   @relation(fields: [order_id], references: [id])
+  product Product @relation(fields: [product_id], references: [id])
+
+  @@index([order_id])
+  @@index([product_id])
+}
+
+model Payment {
+  id                   String        @id @default(uuid()) @db.Uuid
+  customer_id          String        @db.Uuid
+  order_id             String?       @db.Uuid
+  collected_by_user_id String        @db.Uuid
+  amount_paid          Decimal       @db.Decimal(12, 2)
+  payment_type         PaymentType
+  status               PaymentStatus
+  created_at           DateTime      @default(now())
+
+  customer     Customer @relation(fields: [customer_id], references: [id])
+  order        Order?   @relation(fields: [order_id], references: [id])
+  collected_by User     @relation("PaymentCollectedBy", fields: [collected_by_user_id], references: [id])
+
+  @@index([customer_id])
+  @@index([order_id])
+  @@index([status])
+}
+
+model Loan {
+  id               String     @id @default(uuid()) @db.Uuid
+  customer_id      String     @db.Uuid
+  order_id         String     @unique @db.Uuid
+  original_amount  Decimal    @db.Decimal(12, 2)
+  remaining_amount Decimal    @db.Decimal(12, 2)
+  status           LoanStatus
+
+  customer Customer @relation(fields: [customer_id], references: [id])
+  order    Order    @relation(fields: [order_id], references: [id])
+
+  @@index([customer_id])
+  @@index([status])
+}
+
+model LedgerEntry {
+  id           String        @id @default(uuid()) @db.Uuid
+  entry_date   DateTime      @db.Date
+  type         LedgerType
+  category     LedgerCategory
+  reference_id String        @db.Uuid
+  amount       Decimal       @db.Decimal(12, 2)
+  description  String?
+
+  @@index([entry_date])
+  @@index([type])
+  @@index([category])
+}
+
+model DailyBalance {
+  date            DateTime @id @db.Date
+  opening_balance Decimal  @db.Decimal(12, 2)
+  closing_balance Decimal  @db.Decimal(12, 2)
+}
+
+model Employee {
+  id           String        @id @default(uuid()) @db.Uuid
+  name         String
+  basic_salary Decimal       @db.Decimal(12, 2)
+
+  salaries SalaryRecord[]
+}
+
+model SalaryRecord {
+  id               String   @id @default(uuid()) @db.Uuid
+  employee_id      String   @db.Uuid
+  basic_salary     Decimal  @db.Decimal(12, 2)
+  bonus_amount     Decimal  @db.Decimal(12, 2)
+  deduction_amount Decimal  @db.Decimal(12, 2)
+  total_paid       Decimal  @db.Decimal(12, 2)
+  created_at       DateTime @default(now())
+
+  employee Employee @relation(fields: [employee_id], references: [id])
+
+  @@index([employee_id])
+}
+
+model Expense {
+  id             String      @id @default(uuid()) @db.Uuid
+  description    String
+  amount         Decimal     @db.Decimal(12, 2)
+  category       String      @db.VarChar(50)
+  payment_method PaymentType
+  created_at     DateTime    @default(now())
+}

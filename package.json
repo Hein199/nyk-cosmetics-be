@@ -1,0 +1,53 @@
+{
+  "name": "nyk-cosmetics-be",
+  "version": "1.0.0",
+  "private": true,
+  "description": "NYK Cosmetics Business Management backend API",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "nest build",
+    "start": "node dist/main.js",
+    "start:dev": "nest start --watch",
+    "start:prod": "node dist/main.js",
+    "heroku-postbuild": "pnpm prisma:generate && pnpm build",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:seed": "ts-node --transpile-only prisma/seed.ts"
+  },
+  "dependencies": {
+    "@nestjs/common": "^10.3.9",
+    "@nestjs/core": "^10.3.9",
+    "@nestjs/jwt": "^10.2.0",
+    "@nestjs/passport": "^10.0.3",
+    "@nestjs/platform-express": "^10.3.9",
+    "@nestjs/swagger": "^7.4.0",
+    "@prisma/client": "^5.19.1",
+    "bcrypt": "^5.1.1",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1",
+    "swagger-ui-express": "^5.0.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^10.4.2",
+    "@nestjs/schematics": "^10.1.2",
+    "@nestjs/testing": "^10.3.9",
+    "@types/bcrypt": "^5.0.2",
+    "@types/node": "^20.12.12",
+    "@types/passport-jwt": "^4.0.1",
+    "prisma": "^5.19.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  },
+  "prisma": {
+    "seed": "ts-node --transpile-only prisma/seed.ts"
+  },
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": "20.x"
+  }
+}
