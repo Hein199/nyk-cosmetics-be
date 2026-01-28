@@ -7,7 +7,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 
 @Injectable()
 export class UsersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   findAll() {
     return this.prisma.user.findMany({
@@ -58,7 +58,17 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
+    if (dto.username && dto.username !== user.username) {
+      const existing = await this.prisma.user.findUnique({ where: { username: dto.username } });
+      if (existing) {
+        throw new BadRequestException('Username already exists');
+      }
+    }
+
     const data: Prisma.UserUpdateInput = {};
+    if (dto.username) {
+      data.username = dto.username;
+    }
     if (dto.password) {
       data.password_hash = await bcrypt.hash(dto.password, 10);
     }
@@ -71,17 +81,35 @@ export class UsersService {
       data,
     });
 
-    if (dto.role === Role.SALESPERSON) {
-      const existingSalesperson = await this.prisma.salesperson.findUnique({ where: { user_id: id } });
-      if (!existingSalesperson) {
+    const nextRole = dto.role ?? user.role;
+    const existingSalesperson = await this.prisma.salesperson.findUnique({ where: { user_id: id } });
+
+    if (nextRole === Role.SALESPERSON) {
+      const shouldUpdateName = Boolean(dto.salesperson_name) || Boolean(dto.username);
+      const nextName = dto.salesperson_name ?? updated.username;
+      const nextMonthlyTarget = dto.monthly_target
+        ? new Prisma.Decimal(dto.monthly_target)
+        : existingSalesperson?.monthly_target ?? new Prisma.Decimal('0');
+
+      if (existingSalesperson) {
+        await this.prisma.salesperson.update({
+          where: { user_id: id },
+          data: {
+            ...(shouldUpdateName ? { name: nextName } : {}),
+            monthly_target: nextMonthlyTarget,
+          },
+        });
+      } else {
         await this.prisma.salesperson.create({
           data: {
             user_id: id,
-            name: updated.username,
-            monthly_target: new Prisma.Decimal('0'),
+            name: nextName,
+            monthly_target: nextMonthlyTarget,
           },
         });
       }
+    } else if (existingSalesperson) {
+      await this.prisma.salesperson.delete({ where: { user_id: id } });
     }
 
     return { id: updated.id, username: updated.username, role: updated.role };
