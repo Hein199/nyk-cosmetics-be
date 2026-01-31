@@ -132,16 +132,6 @@ export class OrdersService {
         data: { status: OrderStatus.CONFIRMED },
       });
 
-      await tx.loan.create({
-        data: {
-          customer_id: order.customer_id,
-          order_id: order.id,
-          original_amount: order.total_amount,
-          remaining_amount: order.total_amount,
-          status: LoanStatus.OPEN,
-        },
-      });
-
       return updated;
     });
   }
@@ -168,9 +158,27 @@ export class OrdersService {
     if (order.status !== OrderStatus.CONFIRMED) {
       throw new BadRequestException('Only confirmed orders can be delivered');
     }
-    return this.prisma.order.update({
-      where: { id: orderId },
-      data: { status: OrderStatus.DELIVERED },
+
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.order.update({
+        where: { id: orderId },
+        data: { status: OrderStatus.DELIVERED },
+      });
+
+      const existingLoan = await tx.loan.findUnique({ where: { order_id: orderId } });
+      if (!existingLoan) {
+        await tx.loan.create({
+          data: {
+            customer_id: order.customer_id,
+            order_id: order.id,
+            original_amount: order.total_amount,
+            remaining_amount: order.total_amount,
+            status: LoanStatus.OPEN,
+          },
+        });
+      }
+
+      return updated;
     });
   }
 }

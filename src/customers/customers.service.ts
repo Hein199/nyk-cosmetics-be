@@ -1,14 +1,31 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { LoanStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
 
 @Injectable()
 export class CustomersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
-  findAll() {
-    return this.prisma.customer.findMany({ orderBy: { name: 'asc' } });
+  async findAll() {
+    const customers = await this.prisma.customer.findMany({
+      orderBy: { name: 'asc' },
+      include: {
+        loans: {
+          select: { remaining_amount: true, status: true },
+        },
+      },
+    });
+
+    return customers.map((customer) => {
+      const outstanding_amount = customer.loans
+        .filter((loan) => loan.status === LoanStatus.OPEN)
+        .reduce((sum, loan) => sum + Number(loan.remaining_amount), 0);
+
+      const { loans, ...rest } = customer;
+      return { ...rest, outstanding_amount };
+    });
   }
 
   async findOne(id: string) {
