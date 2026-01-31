@@ -126,6 +126,8 @@ model Order {
   total_amount         Decimal     @db.Decimal(12, 2)
   status               OrderStatus
   created_at           DateTime    @default(now())
+  payment_type         PaymentType?
+  remark               String?
 
   customer    Customer @relation(fields: [customer_id], references: [id])
   salesperson User     @relation("SalespersonOrders", fields: [salesperson_user_id], references: [id])
