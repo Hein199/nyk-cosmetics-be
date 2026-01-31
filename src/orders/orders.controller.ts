@@ -12,7 +12,7 @@ import { OrdersService } from './orders.service';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('orders')
 export class OrdersController {
-  constructor(private readonly ordersService: OrdersService) {}
+  constructor(private readonly ordersService: OrdersService) { }
 
   @Post()
   @Roles(Role.SALESPERSON)
@@ -22,14 +22,14 @@ export class OrdersController {
 
   @Get()
   @Roles(Role.ADMIN, Role.SALESPERSON)
-  findAll() {
-    return this.ordersService.findAll();
+  findAll(@Req() req: any) {
+    return this.ordersService.findAll(req.user);
   }
 
   @Get(':id')
   @Roles(Role.ADMIN, Role.SALESPERSON)
-  findOne(@Param('id') id: string) {
-    return this.ordersService.findOne(id);
+  findOne(@Req() req: any, @Param('id') id: string) {
+    return this.ordersService.findOne(req.user, id);
   }
 
   @Post(':id/confirm')

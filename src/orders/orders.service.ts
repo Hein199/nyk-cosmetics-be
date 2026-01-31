@@ -1,23 +1,38 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { LoanStatus, OrderStatus, Prisma } from '@prisma/client';
+import { LoanStatus, OrderStatus, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 
 @Injectable()
 export class OrdersService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
-  findAll() {
+  findAll(user: { id: string; role: Role }) {
+    const where = user.role === Role.ADMIN ? {} : { salesperson_user_id: user.id };
     return this.prisma.order.findMany({
-      include: { items: true, customer: true },
+      where,
+      include: {
+        items: true,
+        customer: true,
+        salesperson: { select: { id: true, username: true } },
+      },
       orderBy: { created_at: 'desc' },
     });
   }
 
-  async findOne(id: string) {
-    const order = await this.prisma.order.findUnique({
-      where: { id },
-      include: { items: { include: { product: true } }, customer: true, loan: true },
+  async findOne(user: { id: string; role: Role }, id: string) {
+    const where = user.role === Role.ADMIN
+      ? { id }
+      : { id, salesperson_user_id: user.id };
+
+    const order = await this.prisma.order.findFirst({
+      where,
+      include: {
+        items: { include: { product: true } },
+        customer: true,
+        loan: true,
+        salesperson: { select: { id: true, username: true } },
+      },
     });
     if (!order) {
       throw new NotFoundException('Order not found');

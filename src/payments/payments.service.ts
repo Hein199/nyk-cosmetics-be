@@ -1,14 +1,25 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { LedgerCategory, LedgerType, LoanStatus, PaymentStatus, Prisma } from '@prisma/client';
+import { LedgerCategory, LedgerType, LoanStatus, PaymentStatus, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 
 @Injectable()
 export class PaymentsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
-  findAll() {
+  findAll(user: { id: string; role: Role }, outstanding = false) {
+    const where: Prisma.PaymentWhereInput = {};
+
+    if (user.role !== Role.ADMIN) {
+      where.collected_by_user_id = user.id;
+    }
+
+    if (outstanding) {
+      where.status = PaymentStatus.PENDING;
+    }
+
     return this.prisma.payment.findMany({
+      where,
       include: { customer: true, order: true },
       orderBy: { created_at: 'desc' },
     });

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -12,7 +12,7 @@ import { PaymentsService } from './payments.service';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('payments')
 export class PaymentsController {
-  constructor(private readonly paymentsService: PaymentsService) {}
+  constructor(private readonly paymentsService: PaymentsService) { }
 
   @Post()
   @Roles(Role.SALESPERSON)
@@ -22,8 +22,8 @@ export class PaymentsController {
 
   @Get()
   @Roles(Role.ADMIN, Role.SALESPERSON)
-  findAll() {
-    return this.paymentsService.findAll();
+  findAll(@Req() req: any, @Query('outstanding') outstanding?: string) {
+    return this.paymentsService.findAll(req.user, outstanding === 'true');
   }
 
   @Post(':id/confirm')
