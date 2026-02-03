@@ -6,13 +6,24 @@ import { UpdateProductDto } from './dto/update-product.dto';
 
 @Injectable()
 export class ProductsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   findAll() {
     return this.prisma.product.findMany({
       include: { inventory: true },
       orderBy: { name: 'asc' },
     });
+  }
+
+  async findOne(id: string) {
+    const product = await this.prisma.product.findUnique({
+      where: { id },
+      include: { inventory: true },
+    });
+    if (!product) {
+      throw new NotFoundException('Product not found');
+    }
+    return product;
   }
 
   async create(dto: CreateProductDto) {

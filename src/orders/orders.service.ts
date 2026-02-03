@@ -47,13 +47,30 @@ export class OrdersService {
     }
 
     return this.prisma.$transaction(async (tx) => {
+      const duplicateProductIds = dto.items
+        .map((item) => item.product_id)
+        .filter((id, index, all) => all.indexOf(id) !== index);
+
+      if (duplicateProductIds.length > 0) {
+        throw new BadRequestException({
+          message: 'Duplicate product in order items',
+          duplicateProductIds: Array.from(new Set(duplicateProductIds)),
+        });
+      }
+
       const productIds = dto.items.map((item) => item.product_id);
+      const uniqueProductIds = Array.from(new Set(productIds));
       const products = await tx.product.findMany({
-        where: { id: { in: productIds }, is_active: true },
+        where: { id: { in: uniqueProductIds }, is_active: true },
       });
 
-      if (products.length !== productIds.length) {
-        throw new BadRequestException('Invalid or inactive product in order items');
+      if (products.length !== uniqueProductIds.length) {
+        const activeIds = new Set(products.map((p) => p.id));
+        const invalidProductIds = uniqueProductIds.filter((id) => !activeIds.has(id));
+        throw new BadRequestException({
+          message: 'Invalid or inactive product in order items',
+          invalidProductIds,
+        });
       }
 
       const productMap = new Map(products.map((p) => [p.id, p]));
