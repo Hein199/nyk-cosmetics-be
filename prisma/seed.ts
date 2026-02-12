@@ -1,7 +1,15 @@
+import 'dotenv/config';
+import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient, Role, CustomerStatus, ProductCategory } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
-const prisma = new PrismaClient();
+const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
+if (!connectionString) {
+  throw new Error('DIRECT_URL or DATABASE_URL is required');
+}
+
+const adapter = new PrismaPg({ connectionString });
+const prisma = new PrismaClient({ adapter });
 
 async function main() {
   const adminUsername = process.env.ADMIN_USERNAME || 'admin';
