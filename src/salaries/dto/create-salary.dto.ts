@@ -1,9 +1,9 @@
-import { IsNotEmpty, IsNumberString, IsOptional, IsString } from 'class-validator';
+import { IsInt, IsNumberString, IsOptional, IsPositive } from 'class-validator';
 
 export class CreateSalaryDto {
-  @IsString()
-  @IsNotEmpty()
-  employee_id: string;
+  @IsInt()
+  @IsPositive()
+  employee_id: number;
 
   @IsNumberString()
   basic_salary: string;

@@ -11,7 +11,31 @@ if (!connectionString) {
 const adapter = new PrismaPg({ connectionString });
 const prisma = new PrismaClient({ adapter });
 
+async function syncSequences() {
+  const tables = [
+    '"User"',
+    '"Salesperson"',
+    '"Customer"',
+    '"Product"',
+    '"Order"',
+    '"OrderItem"',
+    '"Payment"',
+    '"Loan"',
+    '"LedgerEntry"',
+    '"Expense"',
+    '"Employee"',
+    '"SalaryRecord"',
+  ];
+  for (const table of tables) {
+    await prisma.$executeRawUnsafe(
+      `SELECT setval(pg_get_serial_sequence('${table}', 'id'), COALESCE((SELECT MAX(id) FROM ${table}), 0) + 1, false)`
+    );
+  }
+}
+
 async function main() {
+  await syncSequences();
+
   const adminUsername = process.env.ADMIN_USERNAME || 'admin';
   const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@1234';
   const salespersonUsername = process.env.SALESPERSON_USERNAME || 'salesperson';
@@ -78,11 +102,11 @@ async function main() {
     const created = existing
       ? await prisma.product.update({ where: { id: existing.id }, data: product })
       : await prisma.product.create({
-          data: {
-            ...product,
-            inventory: { create: { quantity: 50 } },
-          },
-        });
+        data: {
+          ...product,
+          inventory: { create: { quantity: 50 } },
+        },
+      });
 
     await prisma.inventory.upsert({
       where: { product_id: created.id },

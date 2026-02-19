@@ -1,4 +1,4 @@
-import { Body, Controller, Patch, Param, UseGuards } from '@nestjs/common';
+import { Body, Controller, Patch, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -12,11 +12,11 @@ import { InventoryService } from './inventory.service';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('inventory')
 export class InventoryController {
-  constructor(private readonly inventoryService: InventoryService) {}
+  constructor(private readonly inventoryService: InventoryService) { }
 
   @Patch(':productId')
   @Roles(Role.ADMIN)
-  update(@Param('productId') productId: string, @Body() dto: UpdateInventoryDto) {
+  update(@Param('productId', ParseIntPipe) productId: number, @Body() dto: UpdateInventoryDto) {
     return this.inventoryService.update(productId, dto);
   }
 }

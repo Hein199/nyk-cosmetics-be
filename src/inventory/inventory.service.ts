@@ -4,9 +4,9 @@ import { UpdateInventoryDto } from './dto/update-inventory.dto';
 
 @Injectable()
 export class InventoryService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
-  async update(productId: string, dto: UpdateInventoryDto) {
+  async update(productId: number, dto: UpdateInventoryDto) {
     const inventory = await this.prisma.inventory.findUnique({ where: { product_id: productId } });
     if (!inventory) {
       throw new NotFoundException('Inventory not found');

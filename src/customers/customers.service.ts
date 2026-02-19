@@ -28,7 +28,7 @@ export class CustomersService {
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: number) {
     const customer = await this.prisma.customer.findUnique({ where: { id } });
     if (!customer) {
       throw new NotFoundException('Customer not found');
@@ -40,7 +40,7 @@ export class CustomersService {
     return this.prisma.customer.create({ data: dto });
   }
 
-  async update(id: string, dto: UpdateCustomerDto) {
+  async update(id: number, dto: UpdateCustomerDto) {
     await this.findOne(id);
     return this.prisma.customer.update({ where: { id }, data: dto });
   }

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -13,7 +13,7 @@ import { CustomersService } from './customers.service';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('customers')
 export class CustomersController {
-  constructor(private readonly customersService: CustomersService) {}
+  constructor(private readonly customersService: CustomersService) { }
 
   @Get()
   @Roles(Role.ADMIN, Role.SALESPERSON)
@@ -23,7 +23,7 @@ export class CustomersController {
 
   @Get(':id')
   @Roles(Role.ADMIN, Role.SALESPERSON)
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', ParseIntPipe) id: number) {
     return this.customersService.findOne(id);
   }
 
@@ -35,7 +35,7 @@ export class CustomersController {
 
   @Patch(':id')
   @Roles(Role.ADMIN, Role.SALESPERSON)
-  update(@Param('id') id: string, @Body() dto: UpdateCustomerDto) {
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateCustomerDto) {
     return this.customersService.update(id, dto);
   }
 }

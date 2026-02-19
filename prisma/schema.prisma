@@ -58,7 +58,7 @@ enum LedgerCategory {
 }
 
 model User {
-  id            String        @id @default(uuid()) @db.Uuid
+  id            Int           @id @default(autoincrement())
   username      String        @unique
   password_hash String
   role          Role
@@ -71,8 +71,8 @@ model User {
 }
 
 model Salesperson {
-  id             String  @id @default(uuid()) @db.Uuid
-  user_id        String  @unique @db.Uuid
+  id             Int     @id @default(autoincrement())
+  user_id        Int     @unique
   name           String
   monthly_target Decimal @db.Decimal(12, 2)
 
@@ -80,7 +80,7 @@ model Salesperson {
 }
 
 model Customer {
-  id           String         @id @default(uuid()) @db.Uuid
+  id           Int            @id @default(autoincrement())
   name         String
   phone_number String
   address      String
@@ -94,7 +94,7 @@ model Customer {
 }
 
 model Product {
-  id            String          @id @default(uuid()) @db.Uuid
+  id            Int             @id @default(autoincrement())
   name          String
   category      ProductCategory
   unit_price    Decimal         @db.Decimal(12, 2)
@@ -111,16 +111,16 @@ model Product {
 }
 
 model Inventory {
-  product_id String @id @db.Uuid
+  product_id Int @id
   quantity   Int
 
   product Product @relation(fields: [product_id], references: [id])
 }
 
 model Order {
-  id                   String      @id @default(uuid()) @db.Uuid
-  customer_id          String      @db.Uuid
-  salesperson_user_id  String      @db.Uuid
+  id                   Int         @id @default(autoincrement())
+  customer_id          Int
+  salesperson_user_id  Int
   total_amount         Decimal     @db.Decimal(12, 2)
   status               OrderStatus
   created_at           DateTime    @default(now())
@@ -139,9 +139,9 @@ model Order {
 }
 
 model OrderItem {
-  id         String  @id @default(uuid()) @db.Uuid
-  order_id   String  @db.Uuid
-  product_id String  @db.Uuid
+  id         Int     @id @default(autoincrement())
+  order_id   Int
+  product_id Int
   quantity   Int
   unit_price Decimal @db.Decimal(12, 2)
 
@@ -153,10 +153,10 @@ model OrderItem {
 }
 
 model Payment {
-  id                   String        @id @default(uuid()) @db.Uuid
-  customer_id          String        @db.Uuid
-  order_id             String?       @db.Uuid
-  collected_by_user_id String        @db.Uuid
+  id                   Int           @id @default(autoincrement())
+  customer_id          Int
+  order_id             Int?
+  collected_by_user_id Int
   amount_paid          Decimal       @db.Decimal(12, 2)
   payment_type         PaymentType
   status               PaymentStatus
@@ -172,9 +172,9 @@ model Payment {
 }
 
 model Loan {
-  id               String     @id @default(uuid()) @db.Uuid
-  customer_id      String     @db.Uuid
-  order_id         String     @unique @db.Uuid
+  id               Int        @id @default(autoincrement())
+  customer_id      Int
+  order_id         Int        @unique
   original_amount  Decimal    @db.Decimal(12, 2)
   remaining_amount Decimal    @db.Decimal(12, 2)
   status           LoanStatus
@@ -187,12 +187,12 @@ model Loan {
 }
 
 model LedgerEntry {
-  id           String        @id @default(uuid()) @db.Uuid
-  entry_date   DateTime      @db.Date
+  id           Int            @id @default(autoincrement())
+  entry_date   DateTime       @db.Date
   type         LedgerType
   category     LedgerCategory
-  reference_id String        @db.Uuid
-  amount       Decimal       @db.Decimal(12, 2)
+  reference_id Int
+  amount       Decimal        @db.Decimal(12, 2)
   description  String?
 
   @@index([entry_date])
@@ -207,7 +207,7 @@ model DailyBalance {
 }
 
 model Employee {
-  id           String        @id @default(uuid()) @db.Uuid
+  id           Int           @id @default(autoincrement())
   name         String
   basic_salary Decimal       @db.Decimal(12, 2)
 
@@ -215,8 +215,8 @@ model Employee {
 }
 
 model SalaryRecord {
-  id               String   @id @default(uuid()) @db.Uuid
-  employee_id      String   @db.Uuid
+  id               Int      @id @default(autoincrement())
+  employee_id      Int
   basic_salary     Decimal  @db.Decimal(12, 2)
   bonus_amount     Decimal  @db.Decimal(12, 2)
   deduction_amount Decimal  @db.Decimal(12, 2)
@@ -229,7 +229,7 @@ model SalaryRecord {
 }
 
 model Expense {
-  id             String      @id @default(uuid()) @db.Uuid
+  id             Int         @id @default(autoincrement())
   description    String
   amount         Decimal     @db.Decimal(12, 2)
   category       String      @db.VarChar(50)

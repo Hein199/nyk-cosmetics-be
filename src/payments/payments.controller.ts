@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -28,7 +28,7 @@ export class PaymentsController {
 
   @Post(':id/confirm')
   @Roles(Role.ADMIN)
-  confirm(@Param('id') id: string) {
+  confirm(@Param('id', ParseIntPipe) id: number) {
     return this.paymentsService.confirmPayment(id);
   }
 }

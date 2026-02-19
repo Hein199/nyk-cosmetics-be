@@ -15,7 +15,7 @@ export class ProductsService {
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: number) {
     const product = await this.prisma.product.findUnique({
       where: { id },
       include: { inventory: true },
@@ -41,7 +41,7 @@ export class ProductsService {
     return this.prisma.product.create({ data, include: { inventory: true } });
   }
 
-  async update(id: string, dto: UpdateProductDto) {
+  async update(id: number, dto: UpdateProductDto) {
     const existing = await this.prisma.product.findUnique({ where: { id } });
     if (!existing) {
       throw new NotFoundException('Product not found');

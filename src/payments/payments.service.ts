@@ -7,7 +7,7 @@ import { CreatePaymentDto } from './dto/create-payment.dto';
 export class PaymentsService {
   constructor(private readonly prisma: PrismaService) { }
 
-  findAll(user: { id: string; role: Role }, outstanding = false) {
+  findAll(user: { id: number; role: Role }, outstanding = false) {
     const where: Prisma.PaymentWhereInput = {};
 
     if (user.role !== Role.ADMIN) {
@@ -25,7 +25,7 @@ export class PaymentsService {
     });
   }
 
-  async create(userId: string, dto: CreatePaymentDto) {
+  async create(userId: number, dto: CreatePaymentDto) {
     const customer = await this.prisma.customer.findUnique({ where: { id: dto.customer_id } });
     if (!customer) {
       throw new NotFoundException('Customer not found');
@@ -83,7 +83,7 @@ export class PaymentsService {
     });
   }
 
-  async confirmPayment(paymentId: string) {
+  async confirmPayment(paymentId: number) {
     return this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.findUnique({ where: { id: paymentId } });
       if (!payment) {

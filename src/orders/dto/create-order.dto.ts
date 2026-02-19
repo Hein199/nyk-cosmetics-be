@@ -1,12 +1,12 @@
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsEnum, IsISO8601, IsNotEmpty, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsEnum, IsISO8601, IsInt, IsOptional, IsPositive, IsString, ValidateNested } from 'class-validator';
 import { PaymentType } from '@prisma/client';
 import { CreateOrderItemDto } from './create-order-item.dto';
 
 export class CreateOrderDto {
-  @IsString()
-  @IsNotEmpty()
-  customer_id: string;
+  @IsInt()
+  @IsPositive()
+  customer_id: number;
 
   @IsOptional()
   @IsISO8601()

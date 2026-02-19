@@ -7,7 +7,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 export class OrdersService {
   constructor(private readonly prisma: PrismaService) { }
 
-  findAll(user: { id: string; role: Role }) {
+  findAll(user: { id: number; role: Role }) {
     const where = user.role === Role.ADMIN ? {} : { salesperson_user_id: user.id };
     return this.prisma.order.findMany({
       where,
@@ -20,7 +20,7 @@ export class OrdersService {
     });
   }
 
-  async findOutstanding(user: { id: string; role: Role }) {
+  async findOutstanding(user: { id: number; role: Role }) {
     const where: Prisma.OrderWhereInput = {
       status: OrderStatus.DELIVERED,
       OR: [
@@ -51,7 +51,7 @@ export class OrdersService {
     });
   }
 
-  async findOne(user: { id: string; role: Role }, id: string) {
+  async findOne(user: { id: number; role: Role }, id: number) {
     const where = user.role === Role.ADMIN
       ? { id }
       : { id, salesperson_user_id: user.id };
@@ -71,7 +71,7 @@ export class OrdersService {
     return order;
   }
 
-  async create(userId: string, dto: CreateOrderDto) {
+  async create(userId: number, dto: CreateOrderDto) {
     const customer = await this.prisma.customer.findUnique({ where: { id: dto.customer_id } });
     if (!customer) {
       throw new NotFoundException('Customer not found');
@@ -139,7 +139,7 @@ export class OrdersService {
     });
   }
 
-  async confirmOrder(orderId: string) {
+  async confirmOrder(orderId: number) {
     return this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: orderId },
@@ -190,7 +190,7 @@ export class OrdersService {
     });
   }
 
-  async cancelOrder(orderId: string) {
+  async cancelOrder(orderId: number) {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) {
       throw new NotFoundException('Order not found');
@@ -204,7 +204,7 @@ export class OrdersService {
     });
   }
 
-  async deliverOrder(orderId: string) {
+  async deliverOrder(orderId: number) {
     const order = await this.prisma.order.findUnique({ where: { id: orderId } });
     if (!order) {
       throw new NotFoundException('Order not found');

@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Post, Param, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -23,7 +23,7 @@ export class ProductsController {
 
   @Get(':id')
   @Roles(Role.ADMIN, Role.SALESPERSON)
-  findOne(@Param('id') id: string) {
+  findOne(@Param('id', ParseIntPipe) id: number) {
     return this.productsService.findOne(id);
   }
 
@@ -35,7 +35,7 @@ export class ProductsController {
 
   @Patch(':id')
   @Roles(Role.ADMIN)
-  update(@Param('id') id: string, @Body() dto: UpdateProductDto) {
+  update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateProductDto) {
     return this.productsService.update(id, dto);
   }
 }
