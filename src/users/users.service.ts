@@ -16,6 +16,17 @@ export class UsersService {
     });
   }
 
+  async findOne(id: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { id: true, username: true, role: true, salesperson: true },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    return user;
+  }
+
   async create(dto: CreateUserDto) {
     if (dto.role === Role.SALESPERSON && !dto.salesperson_name) {
       throw new BadRequestException('salesperson_name is required for SALESPERSON');

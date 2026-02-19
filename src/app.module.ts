@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module';
 import { CustomersModule } from './customers/customers.module';
 import { DailyBalanceModule } from './daily-balance/daily-balance.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 import { EmployeesModule } from './employees/employees.module';
 import { ExpensesModule } from './expenses/expenses.module';
 import { InventoryModule } from './inventory/inventory.module';
@@ -28,6 +29,7 @@ import { UsersModule } from './users/users.module';
     SalariesModule,
     LedgerModule,
     DailyBalanceModule,
+    DashboardModule,
   ],
 })
-export class AppModule {}
+export class AppModule { }

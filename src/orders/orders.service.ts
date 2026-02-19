@@ -20,6 +20,29 @@ export class OrdersService {
     });
   }
 
+  async findOutstanding(user: { id: string; role: Role }) {
+    const where: Prisma.OrderWhereInput = {
+      status: OrderStatus.DELIVERED,
+      loan: { status: LoanStatus.OPEN },
+    };
+    if (user.role !== Role.ADMIN) {
+      where.salesperson_user_id = user.id;
+    }
+
+    const orders = await this.prisma.order.findMany({
+      where,
+      include: {
+        customer: { select: { id: true, name: true, phone_number: true, address: true } },
+        salesperson: { select: { id: true, username: true } },
+        loan: true,
+        items: { include: { product: { select: { name: true, category: true } } } },
+      },
+      orderBy: { created_at: 'desc' },
+    });
+
+    return orders;
+  }
+
   async findOne(user: { id: string; role: Role }, id: string) {
     const where = user.role === Role.ADMIN
       ? { id }
@@ -140,12 +163,15 @@ export class OrdersService {
         }
       }
 
-      for (const item of order.items) {
-        await tx.inventory.update({
-          where: { product_id: item.product_id },
-          data: { quantity: { decrement: item.quantity } },
-        });
-      }
+      // Batch update inventory to avoid sequential operations
+      await Promise.all(
+        order.items.map((item) =>
+          tx.inventory.update({
+            where: { product_id: item.product_id },
+            data: { quantity: { decrement: item.quantity } },
+          })
+        )
+      );
 
       const updated = await tx.order.update({
         where: { id: orderId },

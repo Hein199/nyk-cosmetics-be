@@ -15,7 +15,7 @@ export class PaymentsController {
   constructor(private readonly paymentsService: PaymentsService) { }
 
   @Post()
-  @Roles(Role.SALESPERSON)
+  @Roles(Role.ADMIN, Role.SALESPERSON)
   create(@Req() req: any, @Body() dto: CreatePaymentDto) {
     return this.paymentsService.create(req.user.id, dto);
   }

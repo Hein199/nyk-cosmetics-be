@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Post, Param, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Post, Param, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -11,22 +11,30 @@ import { UsersService } from './users.service';
 @ApiTags('users')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard, RolesGuard)
-@Roles(Role.ADMIN)
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
+
+  @Get('me')
+  @Roles(Role.ADMIN, Role.SALESPERSON)
+  getMe(@Req() req: any) {
+    return this.usersService.findOne(req.user.id);
+  }
 
   @Get()
+  @Roles(Role.ADMIN)
   findAll() {
     return this.usersService.findAll();
   }
 
   @Post()
+  @Roles(Role.ADMIN)
   create(@Body() dto: CreateUserDto) {
     return this.usersService.create(dto);
   }
 
   @Patch(':id')
+  @Roles(Role.ADMIN)
   update(@Param('id') id: string, @Body() dto: UpdateUserDto) {
     return this.usersService.update(id, dto);
   }

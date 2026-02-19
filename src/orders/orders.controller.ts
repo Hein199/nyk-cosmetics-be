@@ -26,6 +26,12 @@ export class OrdersController {
     return this.ordersService.findAll(req.user);
   }
 
+  @Get('outstanding')
+  @Roles(Role.ADMIN, Role.SALESPERSON)
+  findOutstanding(@Req() req: any) {
+    return this.ordersService.findOutstanding(req.user);
+  }
+
   @Get(':id')
   @Roles(Role.ADMIN, Role.SALESPERSON)
   findOne(@Req() req: any, @Param('id') id: string) {
