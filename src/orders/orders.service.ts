@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { LoanStatus, OrderStatus, Prisma, Role } from '@prisma/client';
+import { LoanStatus, OrderStatus, PaymentStatus, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 
@@ -23,24 +23,32 @@ export class OrdersService {
   async findOutstanding(user: { id: string; role: Role }) {
     const where: Prisma.OrderWhereInput = {
       status: OrderStatus.DELIVERED,
-      loan: { status: LoanStatus.OPEN },
+      OR: [
+        { loan: { status: LoanStatus.OPEN } },
+        {
+          loan: { status: LoanStatus.CLOSED },
+          payments: { some: { status: PaymentStatus.PENDING } },
+        },
+      ],
     };
     if (user.role !== Role.ADMIN) {
       where.salesperson_user_id = user.id;
     }
 
-    const orders = await this.prisma.order.findMany({
+    return this.prisma.order.findMany({
       where,
       include: {
         customer: { select: { id: true, name: true, phone_number: true, address: true } },
         salesperson: { select: { id: true, username: true } },
         loan: true,
         items: { include: { product: { select: { name: true, category: true } } } },
+        payments: {
+          where: { status: PaymentStatus.PENDING },
+          orderBy: { created_at: 'desc' },
+        },
       },
       orderBy: { created_at: 'desc' },
     });
-
-    return orders;
   }
 
   async findOne(user: { id: string; role: Role }, id: string) {

@@ -31,22 +31,55 @@ export class PaymentsService {
       throw new NotFoundException('Customer not found');
     }
 
-    if (dto.order_id) {
-      const order = await this.prisma.order.findUnique({ where: { id: dto.order_id } });
-      if (!order) {
-        throw new NotFoundException('Order not found');
-      }
-    }
+    return this.prisma.$transaction(async (tx) => {
+      const paymentAmount = new Prisma.Decimal(dto.amount_paid);
 
-    return this.prisma.payment.create({
-      data: {
-        customer_id: dto.customer_id,
-        order_id: dto.order_id,
-        collected_by_user_id: userId,
-        amount_paid: new Prisma.Decimal(dto.amount_paid),
-        payment_type: dto.payment_type,
-        status: PaymentStatus.PENDING,
-      },
+      if (dto.order_id) {
+        const order = await tx.order.findUnique({ where: { id: dto.order_id } });
+        if (!order) throw new NotFoundException('Order not found');
+
+        const loan = await tx.loan.findUnique({ where: { order_id: dto.order_id } });
+        if (!loan) throw new BadRequestException('No loan record found for this order');
+        if (loan.status !== LoanStatus.OPEN) throw new BadRequestException('Loan is already fully paid');
+
+        const remaining = new Prisma.Decimal(loan.remaining_amount.toString());
+        if (paymentAmount.greaterThan(remaining)) {
+          throw new BadRequestException('Payment amount exceeds outstanding loan balance');
+        }
+
+        const payment = await tx.payment.create({
+          data: {
+            customer_id: dto.customer_id,
+            order_id: dto.order_id,
+            collected_by_user_id: userId,
+            amount_paid: paymentAmount,
+            payment_type: dto.payment_type,
+            status: PaymentStatus.PENDING,
+          },
+        });
+
+        const newRemaining = remaining.minus(paymentAmount);
+        await tx.loan.update({
+          where: { id: loan.id },
+          data: {
+            remaining_amount: newRemaining,
+            status: newRemaining.isZero() ? LoanStatus.CLOSED : LoanStatus.OPEN,
+          },
+        });
+
+        return payment;
+      }
+
+      // Walk-in / non-order payment
+      return tx.payment.create({
+        data: {
+          customer_id: dto.customer_id,
+          collected_by_user_id: userId,
+          amount_paid: paymentAmount,
+          payment_type: dto.payment_type,
+          status: PaymentStatus.PENDING,
+        },
+      });
     });
   }
 
@@ -60,29 +93,8 @@ export class PaymentsService {
         throw new BadRequestException('Payment already confirmed');
       }
 
-      if (payment.order_id) {
-        const loan = await tx.loan.findUnique({ where: { order_id: payment.order_id } });
-        if (!loan) {
-          throw new BadRequestException('Loan not found for order');
-        }
-        if (loan.status !== LoanStatus.OPEN) {
-          throw new BadRequestException('Loan already closed');
-        }
-
-        const remaining = new Prisma.Decimal(loan.remaining_amount.toString());
-        const nextRemaining = remaining.minus(payment.amount_paid);
-        if (nextRemaining.isNegative()) {
-          throw new BadRequestException('Payment exceeds remaining loan amount');
-        }
-
-        await tx.loan.update({
-          where: { id: loan.id },
-          data: {
-            remaining_amount: nextRemaining,
-            status: nextRemaining.isZero() ? LoanStatus.CLOSED : LoanStatus.OPEN,
-          },
-        });
-      }
+      // Loan remaining_amount was already deducted when the payment was created.
+      // Only update the payment status and add a ledger entry here.
 
       const updatedPayment = await tx.payment.update({
         where: { id: paymentId },
