@@ -12,12 +12,14 @@ import { PaymentsModule } from './payments/payments.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProductsModule } from './products/products.module';
 import { SalariesModule } from './salaries/salaries.module';
+import { UploadModule } from './upload/upload.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
     PrismaModule,
     AuthModule,
+    UploadModule,
     UsersModule,
     CustomersModule,
     ProductsModule,
