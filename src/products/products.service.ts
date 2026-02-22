@@ -33,6 +33,7 @@ export class ProductsService {
       unit_price: new Prisma.Decimal(dto.unit_price),
       pcs_per_dozen: dto.pcs_per_dozen ? new Prisma.Decimal(dto.pcs_per_dozen) : new Prisma.Decimal('12'),
       pcs_per_pack: dto.pcs_per_pack ? new Prisma.Decimal(dto.pcs_per_pack) : new Prisma.Decimal('12'),
+      pcs_per_box: dto.pcs_per_box ? new Prisma.Decimal(dto.pcs_per_box) : new Prisma.Decimal('24'),
       photo_url: dto.photo_url,
       is_active: dto.is_active ?? true,
       inventory: { create: { quantity: 0 } },
@@ -53,6 +54,7 @@ export class ProductsService {
       unit_price: dto.unit_price ? new Prisma.Decimal(dto.unit_price) : undefined,
       pcs_per_dozen: dto.pcs_per_dozen ? new Prisma.Decimal(dto.pcs_per_dozen) : undefined,
       pcs_per_pack: dto.pcs_per_pack ? new Prisma.Decimal(dto.pcs_per_pack) : undefined,
+      pcs_per_box: dto.pcs_per_box ? new Prisma.Decimal(dto.pcs_per_box) : undefined,
       photo_url: dto.photo_url,
       is_active: dto.is_active,
     };

@@ -20,6 +20,10 @@ export class CreateProductDto {
   @IsNumberString()
   pcs_per_pack?: string;
 
+  @IsOptional()
+  @IsNumberString()
+  pcs_per_box?: string;
+
   @IsString()
   @IsNotEmpty()
   photo_url: string;

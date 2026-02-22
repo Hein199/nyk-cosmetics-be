@@ -23,6 +23,10 @@ export class UpdateProductDto {
   pcs_per_pack?: string;
 
   @IsOptional()
+  @IsNumberString()
+  pcs_per_box?: string;
+
+  @IsOptional()
   @IsString()
   photo_url?: string;
 
