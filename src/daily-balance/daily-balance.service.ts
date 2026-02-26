@@ -8,13 +8,12 @@ export class DailyBalanceService {
 
   private parseDate(date?: string) {
     if (!date) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      return today;
+      // Bangkok today midnight
+      const todayBkk = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date());
+      return new Date(`${todayBkk}T00:00:00+07:00`);
     }
-    const parsed = new Date(date);
-    parsed.setHours(0, 0, 0, 0);
-    return parsed;
+    // Interpret date string as Bangkok midnight (UTC+7)
+    return new Date(`${date}T00:00:00+07:00`);
   }
 
   async closeDay(date?: string) {

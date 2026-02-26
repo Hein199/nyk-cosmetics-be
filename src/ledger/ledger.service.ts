@@ -12,10 +12,11 @@ export class LedgerService {
     if (from || to) {
       where.entry_date = {};
       if (from) {
-        (where.entry_date as Prisma.DateTimeFilter).gte = new Date(from);
+        // Parse as Bangkok midnight (UTC+7) to avoid off-by-7h UTC shift
+        (where.entry_date as Prisma.DateTimeFilter).gte = new Date(`${from}T00:00:00+07:00`);
       }
       if (to) {
-        (where.entry_date as Prisma.DateTimeFilter).lte = new Date(to);
+        (where.entry_date as Prisma.DateTimeFilter).lte = new Date(`${to}T23:59:59.999+07:00`);
       }
     }
 
