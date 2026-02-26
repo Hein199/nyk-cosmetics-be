@@ -21,7 +21,7 @@ export class LedgerService {
 
     const entries = await this.prisma.ledgerEntry.findMany({
       where,
-      orderBy: [{ entry_date: 'asc' }, { id: 'asc' }],
+      orderBy: [{ entry_date: 'desc' }, { id: 'desc' }],
     });
 
     // Enrich payment entries (SALE category) with customer name + order id
