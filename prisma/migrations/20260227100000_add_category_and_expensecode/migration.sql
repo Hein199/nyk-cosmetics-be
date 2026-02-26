@@ -1,0 +1,1 @@
+-- no-op: Category table and expenseCode column were handled in 20260226204555_category

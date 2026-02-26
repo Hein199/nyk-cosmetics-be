@@ -13,11 +13,21 @@ export class ExpensesService {
 
   async create(dto: CreateExpenseDto) {
     return this.prisma.$transaction(async (tx) => {
+      const latest = await tx.expense.findFirst({
+        orderBy: { expenseCode: 'desc' },
+        select: { expenseCode: true },
+      });
+      const lastNumber = latest?.expenseCode
+        ? Number(latest.expenseCode.replace('EXP-', ''))
+        : 0;
+      const nextNumber = lastNumber + 1;
+      const expenseCode = `EXP-${String(nextNumber).padStart(4, '0')}`;
+
       const expense = await tx.expense.create({
         data: {
+          expenseCode,
           description: dto.description,
           amount: new Prisma.Decimal(dto.amount),
-          category: dto.category,
           payment_method: dto.payment_method,
         },
       });

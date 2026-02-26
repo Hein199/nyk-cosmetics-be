@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Logger, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -12,11 +12,14 @@ import { ExpensesService } from './expenses.service';
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('expenses')
 export class ExpensesController {
+  private readonly logger = new Logger(ExpensesController.name);
+
   constructor(private readonly expensesService: ExpensesService) {}
 
   @Post()
   @Roles(Role.ADMIN)
   create(@Body() dto: CreateExpenseDto) {
+    this.logger.log('POST /expenses payload: ' + JSON.stringify(dto));
     return this.expensesService.create(dto);
   }
 
