@@ -78,14 +78,21 @@ export class OrdersService {
     }
 
     return this.prisma.$transaction(async (tx) => {
-      const duplicateProductIds = dto.items
-        .map((item) => item.product_id)
-        .filter((id, index, all) => all.indexOf(id) !== index);
+      // Allow same product_id with different unit_type, but reject true duplicates (same product_id + unit_type)
+      const seen = new Set<string>();
+      const duplicateKeys: string[] = [];
+      for (const item of dto.items) {
+        const key = `${item.product_id}:${item.unit_type ?? 'Pcs'}`;
+        if (seen.has(key)) {
+          duplicateKeys.push(key);
+        }
+        seen.add(key);
+      }
 
-      if (duplicateProductIds.length > 0) {
+      if (duplicateKeys.length > 0) {
         throw new BadRequestException({
-          message: 'Duplicate product in order items',
-          duplicateProductIds: Array.from(new Set(duplicateProductIds)),
+          message: 'Duplicate product with same unit type in order items',
+          duplicateKeys: Array.from(new Set(duplicateKeys)),
         });
       }
 
@@ -162,7 +169,7 @@ export class OrdersService {
         ).map((inv) => [inv.product_id, inv]),
       );
 
-      // Compute actual piece deduction per item based on unit_type
+      // Compute actual piece deduction per product, summing across different unit_types
       const deductionMap = new Map<number, number>();
       for (const item of order.items) {
         let multiplier = 1;
@@ -171,12 +178,12 @@ export class OrdersService {
         } else if (item.unit_type === 'P') {
           multiplier = Number(item.product.pcs_per_box);
         }
-        deductionMap.set(item.product_id, item.quantity * multiplier);
+        const current = deductionMap.get(item.product_id) ?? 0;
+        deductionMap.set(item.product_id, current + item.quantity * multiplier);
       }
 
-      for (const item of order.items) {
-        const inventory = inventoryMap.get(item.product_id);
-        const deduction = deductionMap.get(item.product_id) ?? item.quantity;
+      for (const [productId, deduction] of deductionMap) {
+        const inventory = inventoryMap.get(productId);
         if (!inventory) {
           throw new BadRequestException('Inventory record missing for product');
         }
@@ -185,12 +192,12 @@ export class OrdersService {
         }
       }
 
-      // Batch update inventory using actual piece deductions
+      // Batch update inventory using actual piece deductions (once per product)
       await Promise.all(
-        order.items.map((item) =>
+        Array.from(deductionMap.entries()).map(([productId, deduction]) =>
           tx.inventory.update({
-            where: { product_id: item.product_id },
-            data: { quantity: { decrement: deductionMap.get(item.product_id) ?? item.quantity } },
+            where: { product_id: productId },
+            data: { quantity: { decrement: deduction } },
           })
         )
       );
