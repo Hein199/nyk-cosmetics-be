@@ -99,7 +99,6 @@ model Product {
   category      ProductCategory
   unit_price    Decimal         @db.Decimal(12, 2)
   pcs_per_dozen Decimal         @default(12) @db.Decimal(12, 2)
-  pcs_per_pack  Decimal         @default(12) @db.Decimal(12, 2)
   pcs_per_box   Decimal         @default(24) @db.Decimal(12, 2)
   photo_url     String
   is_active     Boolean         @default(true)
@@ -144,6 +143,7 @@ model OrderItem {
   order_id   Int
   product_id Int
   quantity   Int
+  unit_type  String  @default("Pcs")
   unit_price Decimal @db.Decimal(12, 2)
 
   order   Order   @relation(fields: [order_id], references: [id])

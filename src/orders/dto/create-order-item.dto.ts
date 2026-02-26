@@ -1,4 +1,4 @@
-import { IsInt, IsNumberString, IsOptional, IsPositive, Min } from 'class-validator';
+import { IsIn, IsInt, IsNumberString, IsOptional, IsPositive, IsString, Min } from 'class-validator';
 
 export class CreateOrderItemDto {
   @IsInt()
@@ -8,6 +8,11 @@ export class CreateOrderItemDto {
   @IsInt()
   @Min(1)
   quantity: number;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['Pcs', 'D', 'P'])
+  unit_type?: string;
 
   @IsOptional()
   @IsNumberString()

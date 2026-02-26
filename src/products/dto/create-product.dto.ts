@@ -18,10 +18,6 @@ export class CreateProductDto {
 
   @IsOptional()
   @IsNumberString()
-  pcs_per_pack?: string;
-
-  @IsOptional()
-  @IsNumberString()
   pcs_per_box?: string;
 
   @IsString()

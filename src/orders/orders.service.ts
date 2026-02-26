@@ -119,6 +119,7 @@ export class OrdersService {
         return {
           product_id: item.product_id,
           quantity: item.quantity,
+          unit_type: item.unit_type ?? 'Pcs',
           unit_price: unitPrice,
         };
       });
@@ -143,7 +144,7 @@ export class OrdersService {
     return this.prisma.$transaction(async (tx) => {
       const order = await tx.order.findUnique({
         where: { id: orderId },
-        include: { items: true },
+        include: { items: { include: { product: { select: { id: true, pcs_per_dozen: true, pcs_per_box: true } } } } },
       });
 
       if (!order) {
@@ -161,22 +162,35 @@ export class OrdersService {
         ).map((inv) => [inv.product_id, inv]),
       );
 
+      // Compute actual piece deduction per item based on unit_type
+      const deductionMap = new Map<number, number>();
+      for (const item of order.items) {
+        let multiplier = 1;
+        if (item.unit_type === 'D') {
+          multiplier = Number(item.product.pcs_per_dozen);
+        } else if (item.unit_type === 'P') {
+          multiplier = Number(item.product.pcs_per_box);
+        }
+        deductionMap.set(item.product_id, item.quantity * multiplier);
+      }
+
       for (const item of order.items) {
         const inventory = inventoryMap.get(item.product_id);
+        const deduction = deductionMap.get(item.product_id) ?? item.quantity;
         if (!inventory) {
           throw new BadRequestException('Inventory record missing for product');
         }
-        if (inventory.quantity < item.quantity) {
+        if (inventory.quantity < deduction) {
           throw new BadRequestException('Insufficient inventory');
         }
       }
 
-      // Batch update inventory to avoid sequential operations
+      // Batch update inventory using actual piece deductions
       await Promise.all(
         order.items.map((item) =>
           tx.inventory.update({
             where: { product_id: item.product_id },
-            data: { quantity: { decrement: item.quantity } },
+            data: { quantity: { decrement: deductionMap.get(item.product_id) ?? item.quantity } },
           })
         )
       );
