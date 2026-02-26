@@ -9,10 +9,6 @@ export class CreateExpenseDto {
   @IsNumberString()
   amount: string;
 
-  @IsString()
-  @IsNotEmpty()
-  category: string;
-
   @IsEnum(PaymentType)
   payment_method: PaymentType;
 }

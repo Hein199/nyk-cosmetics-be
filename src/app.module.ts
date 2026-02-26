@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from './auth/auth.module';
+import { CategoriesModule } from './categories/categories.module';
 import { CustomersModule } from './customers/customers.module';
 import { DailyBalanceModule } from './daily-balance/daily-balance.module';
 import { DashboardModule } from './dashboard/dashboard.module';
@@ -20,6 +21,7 @@ import { UsersModule } from './users/users.module';
     PrismaModule,
     AuthModule,
     UploadModule,
+    CategoriesModule,
     UsersModule,
     CustomersModule,
     ProductsModule,

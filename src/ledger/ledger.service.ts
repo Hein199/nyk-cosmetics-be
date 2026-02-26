@@ -43,19 +43,19 @@ export class LedgerService {
       }
     }
 
-    // Enrich expense entries with expense description/category
+    // Enrich expense entries with expense code
     const expenseRefIds = entries
       .filter((e) => e.category === LedgerCategory.EXPENSE && e.reference_id !== 0)
       .map((e) => e.reference_id);
 
-    const expenseMap = new Map<number, { category: string }>();
+    const expenseMap = new Map<number, { expenseCode: string }>();
     if (expenseRefIds.length > 0) {
       const expenses = await this.prisma.expense.findMany({
         where: { id: { in: expenseRefIds } },
-        select: { id: true, category: true },
+        select: { id: true, expenseCode: true },
       });
       for (const ex of expenses) {
-        expenseMap.set(ex.id, { category: ex.category });
+        expenseMap.set(ex.id, { expenseCode: ex.expenseCode });
       }
     }
 
@@ -73,7 +73,7 @@ export class LedgerService {
         }
       } else if (e.category === LedgerCategory.EXPENSE && !isManual) {
         const info = expenseMap.get(e.reference_id);
-        reference_label = info ? `Expense - ${info.category}` : `Expense #${e.reference_id}`;
+        reference_label = info?.expenseCode ?? `Expense #${e.reference_id}`;
       } else if (e.category === LedgerCategory.OTHER_INCOME && !isManual) {
         reference_label = `Payment #${e.reference_id}`;
       }
