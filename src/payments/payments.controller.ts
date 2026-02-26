@@ -17,7 +17,7 @@ export class PaymentsController {
   @Post()
   @Roles(Role.ADMIN, Role.SALESPERSON)
   create(@Req() req: any, @Body() dto: CreatePaymentDto) {
-    return this.paymentsService.create(req.user.id, dto);
+    return this.paymentsService.create(req.user, dto);
   }
 
   @Get()
@@ -30,5 +30,11 @@ export class PaymentsController {
   @Roles(Role.ADMIN)
   confirm(@Param('id', ParseIntPipe) id: number) {
     return this.paymentsService.confirmPayment(id);
+  }
+
+  @Post(':id/reject')
+  @Roles(Role.ADMIN)
+  reject(@Param('id', ParseIntPipe) id: number) {
+    return this.paymentsService.rejectPayment(id);
   }
 }
