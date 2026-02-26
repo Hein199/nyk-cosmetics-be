@@ -1,10 +1,11 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { UpdateOrderItemsDto } from './dto/update-order-items.dto';
 import { OrdersService } from './orders.service';
 
 @ApiTags('orders')
@@ -42,6 +43,12 @@ export class OrdersController {
   @Roles(Role.ADMIN)
   confirm(@Param('id', ParseIntPipe) id: number) {
     return this.ordersService.confirmOrder(id);
+  }
+
+  @Patch(':id/items')
+  @Roles(Role.ADMIN)
+  updateItems(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateOrderItemsDto) {
+    return this.ordersService.updateOrderItems(id, dto);
   }
 
   @Post(':id/cancel')

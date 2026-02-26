@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { LoanStatus, OrderStatus, PaymentStatus, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { UpdateOrderItemsDto } from './dto/update-order-items.dto';
 
 @Injectable()
 export class OrdersService {
@@ -208,6 +209,56 @@ export class OrdersService {
       });
 
       return updated;
+    });
+  }
+
+  async updateOrderItems(orderId: number, dto: UpdateOrderItemsDto) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: true },
+    });
+    if (!order) {
+      throw new NotFoundException('Order not found');
+    }
+    if (order.status !== OrderStatus.PENDING_ADMIN) {
+      throw new BadRequestException('Only pending orders can be edited');
+    }
+
+    const existingItemIds = new Set(order.items.map((i) => i.id));
+    for (const entry of dto.items) {
+      if (!existingItemIds.has(entry.id)) {
+        throw new BadRequestException(`Order item ${entry.id} does not belong to this order`);
+      }
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      for (const entry of dto.items) {
+        const data: Prisma.OrderItemUpdateInput = {};
+        if (entry.quantity !== undefined) {
+          data.quantity = entry.quantity;
+        }
+        if (entry.unit_price !== undefined) {
+          data.unit_price = new Prisma.Decimal(entry.unit_price);
+        }
+        await tx.orderItem.update({ where: { id: entry.id }, data });
+      }
+
+      // Recalculate total
+      const updatedItems = await tx.orderItem.findMany({ where: { order_id: orderId } });
+      const newTotal = updatedItems.reduce(
+        (sum, item) => sum.plus(new Prisma.Decimal(item.unit_price.toString()).mul(item.quantity)),
+        new Prisma.Decimal(0),
+      );
+
+      return tx.order.update({
+        where: { id: orderId },
+        data: { total_amount: newTotal },
+        include: {
+          items: { include: { product: true } },
+          customer: true,
+          salesperson: { select: { id: true, username: true } },
+        },
+      });
     });
   }
 
