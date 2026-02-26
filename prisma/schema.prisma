@@ -38,6 +38,7 @@ enum PaymentType {
 enum PaymentStatus {
   PENDING
   CONFIRMED
+  REJECTED
 }
 
 enum LoanStatus {
@@ -188,13 +189,14 @@ model Loan {
 }
 
 model LedgerEntry {
-  id           Int            @id @default(autoincrement())
-  entry_date   DateTime       @db.Date
-  type         LedgerType
-  category     LedgerCategory
-  reference_id Int
-  amount       Decimal        @db.Decimal(12, 2)
-  description  String?
+  id                 Int            @id @default(autoincrement())
+  entry_date         DateTime       @db.Date
+  type               LedgerType
+  category           LedgerCategory
+  reference_id       Int
+  amount             Decimal        @db.Decimal(12, 2)
+  description        String?
+  is_system_generated Boolean       @default(false)
 
   @@index([entry_date])
   @@index([type])
