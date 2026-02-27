@@ -9,7 +9,7 @@
     "start": "node dist/main.js",
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main.js",
-    "heroku-postbuild": "pnpm prisma:generate && pnpm build",
+    "heroku-postbuild": "pnpm prisma:generate && pnpm prisma:deploy && pnpm build",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
