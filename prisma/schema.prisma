@@ -56,6 +56,11 @@ model User {
   username      String        @unique
   password_hash String
   role          Role
+  full_name     String?
+  email         String?
+  phone_number  String?
+  photo_url     String?
+  created_at    DateTime      @default(now())
 
   salesperson   Salesperson?
   orders        Order[]       @relation("SalespersonOrders")
@@ -68,6 +73,7 @@ model Salesperson {
   id             Int     @id @default(autoincrement())
   user_id        Int     @unique
   name           String
+  region         String?
   monthly_target Decimal @db.Decimal(12, 2)
 
   user User @relation(fields: [user_id], references: [id])
@@ -90,6 +96,7 @@ model Customer {
 model Product {
   id            Int             @id @default(autoincrement())
   name          String
+  description   String?
   category      String
   unit_price    Decimal         @db.Decimal(12, 2)
   pcs_per_dozen Decimal         @default(12) @db.Decimal(12, 2)
@@ -237,4 +244,11 @@ model Expense {
   amount         Decimal     @db.Decimal(12, 2)
   payment_method PaymentType
   created_at     DateTime    @default(now())
+}
+
+model SystemSettings {
+  id          Int      @id @default(1)
+  system_name String   @default("NYK Cosmetics")
+  system_logo String?
+  updated_at  DateTime @updatedAt
 }
