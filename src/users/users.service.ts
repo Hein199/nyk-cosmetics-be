@@ -19,7 +19,11 @@ export class UsersService {
   async findOne(id: number) {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      select: { id: true, username: true, role: true, salesperson: true },
+      select: {
+        id: true, username: true, role: true,
+        full_name: true, email: true, phone_number: true, photo_url: true, created_at: true,
+        salesperson: true,
+      },
     });
     if (!user) {
       throw new NotFoundException('User not found');
@@ -124,5 +128,27 @@ export class UsersService {
     }
 
     return { id: updated.id, username: updated.username, role: updated.role };
+  }
+
+  async updateProfile(id: number, dto: { full_name?: string; email?: string; phone_number?: string; photo_url?: string }) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    const updated = await this.prisma.user.update({
+      where: { id },
+      data: {
+        ...(dto.full_name !== undefined ? { full_name: dto.full_name } : {}),
+        ...(dto.email !== undefined ? { email: dto.email } : {}),
+        ...(dto.phone_number !== undefined ? { phone_number: dto.phone_number } : {}),
+        ...(dto.photo_url !== undefined ? { photo_url: dto.photo_url } : {}),
+      },
+      select: {
+        id: true, username: true, role: true,
+        full_name: true, email: true, phone_number: true, photo_url: true, created_at: true,
+        salesperson: true,
+      },
+    });
+    return updated;
   }
 }

@@ -22,4 +22,20 @@ export class UpdateUserDto {
   @IsOptional()
   @IsString()
   monthly_target?: string;
+
+  @IsOptional()
+  @IsString()
+  full_name?: string;
+
+  @IsOptional()
+  @IsString()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
+  phone_number?: string;
+
+  @IsOptional()
+  @IsString()
+  photo_url?: string;
 }

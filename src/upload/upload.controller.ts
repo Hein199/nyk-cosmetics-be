@@ -14,7 +14,7 @@ export class UploadController {
     constructor(private readonly uploadService: UploadService) { }
 
     @Get('presign')
-    @Roles(Role.ADMIN)
+    @Roles(Role.ADMIN, Role.SALESPERSON)
     @ApiQuery({ name: 'filename', required: true })
     @ApiQuery({ name: 'contentType', required: true })
     getPresignedUrl(
