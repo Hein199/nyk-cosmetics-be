@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { PrismaPg } from '@prisma/adapter-pg';
-import { PrismaClient, Role, CustomerStatus, ProductCategory } from '@prisma/client';
+import { PrismaClient, Role, CustomerStatus } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const connectionString = process.env.DIRECT_URL ?? process.env.DATABASE_URL;
@@ -79,7 +79,7 @@ async function main() {
   const products = [
     {
       name: 'Rose Lipstick',
-      category: ProductCategory.COSMETIC,
+      category: 'Cosmetic',
       unit_price: 15.5,
       pcs_per_dozen: 12,
       photo_url: 'https://example.com/lipstick.jpg',
@@ -87,7 +87,7 @@ async function main() {
     },
     {
       name: 'Aloe Skin Gel',
-      category: ProductCategory.SKINCARE,
+      category: 'Skincare',
       unit_price: 22.75,
       pcs_per_dozen: 12,
       photo_url: 'https://example.com/gel.jpg',
