@@ -3,3 +3,5 @@ node_modules
 .env
 .prisma
 API_REQUEST_BODIES.md
+tsconfig.build.tsbuildinfo
+*.tsbuildinfo
