@@ -1,13 +1,13 @@
-import { IsBoolean, IsEnum, IsNotEmpty, IsNumberString, IsOptional, IsString } from 'class-validator';
-import { ProductCategory } from '@prisma/client';
+import { IsBoolean, IsNotEmpty, IsNumberString, IsOptional, IsString } from 'class-validator';
 
 export class CreateProductDto {
   @IsString()
   @IsNotEmpty()
   name: string;
 
-  @IsEnum(ProductCategory)
-  category: ProductCategory;
+  @IsString()
+  @IsNotEmpty()
+  category: string;
 
   @IsNumberString()
   unit_price: string;

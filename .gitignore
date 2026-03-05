@@ -4,3 +4,4 @@ node_modules
 .prisma
 API_REQUEST_BODIES.md
 tsconfig.build.tsbuildinfo
+*.tsbuildinfo
