@@ -22,19 +22,22 @@ export class ExpensesService {
         : 0;
       const nextNumber = lastNumber + 1;
       const expenseCode = `EXP-${String(nextNumber).padStart(4, '0')}`;
+      const expenseDate = dto.expense_date ? new Date(dto.expense_date) : new Date();
 
       const expense = await tx.expense.create({
         data: {
           expenseCode,
+          category: dto.category,
           description: dto.description,
           amount: new Prisma.Decimal(dto.amount),
           payment_method: dto.payment_method,
+          expense_date: expenseDate,
         },
       });
 
       await tx.ledgerEntry.create({
         data: {
-          entry_date: new Date(),
+          entry_date: expenseDate,
           type: LedgerType.CREDIT,
           category: LedgerCategory.EXPENSE,
           reference_id: expense.id,

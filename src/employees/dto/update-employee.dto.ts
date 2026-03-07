@@ -1,27 +1,30 @@
 import { IsDateString, IsNotEmpty, IsNumberString, IsOptional, IsString } from 'class-validator';
 
-export class CreateEmployeeDto {
+export class UpdateEmployeeDto {
   @IsString()
   @IsNotEmpty()
-  name: string;
+  @IsOptional()
+  name?: string;
 
   @IsString()
-  @IsNotEmpty()
-  phone: string;
+  @IsOptional()
+  phone?: string;
 
   @IsString()
   @IsOptional()
   address?: string;
 
   @IsString()
-  @IsNotEmpty()
-  position: string;
+  @IsOptional()
+  position?: string;
 
   @IsNumberString()
-  basic_salary: string;
+  @IsOptional()
+  basic_salary?: string;
 
   @IsDateString()
-  start_date: string;
+  @IsOptional()
+  start_date?: string;
 
   @IsString()
   @IsOptional()

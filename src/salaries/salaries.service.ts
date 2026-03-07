@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { LedgerCategory, LedgerType, Prisma } from '@prisma/client';
+import { LedgerCategory, LedgerType, PaymentType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSalaryDto } from './dto/create-salary.dto';
 
@@ -21,31 +21,64 @@ export class SalariesService {
     }
 
     const basicSalary = new Prisma.Decimal(dto.basic_salary);
-    const bonusAmount = dto.bonus_amount ? new Prisma.Decimal(dto.bonus_amount) : new Prisma.Decimal(0);
-    const deductionAmount = dto.deduction_amount
-      ? new Prisma.Decimal(dto.deduction_amount)
-      : new Prisma.Decimal(0);
-    const totalPaid = basicSalary.plus(bonusAmount).minus(deductionAmount);
+
+    // Sum all bonus amounts
+    const totalBonusAmount = (dto.bonuses ?? []).reduce(
+      (sum, b) => sum.plus(new Prisma.Decimal(b.amount)),
+      new Prisma.Decimal(0),
+    );
+
+    const netSalary = basicSalary.plus(totalBonusAmount);
+    const paymentDate = new Date(dto.payment_date);
 
     return this.prisma.$transaction(async (tx) => {
+      // 1. Create salary record
       const salary = await tx.salaryRecord.create({
         data: {
           employee_id: dto.employee_id,
+          salary_month: dto.salary_month,
           basic_salary: basicSalary,
-          bonus_amount: bonusAmount,
-          deduction_amount: deductionAmount,
-          total_paid: totalPaid,
+          bonus_amount: totalBonusAmount,
+          bonus_types: dto.bonuses ? (dto.bonuses as unknown as Prisma.JsonArray) : [],
+          deduction_amount: new Prisma.Decimal(0),
+          net_salary: netSalary,
+          payment_date: paymentDate,
+          remark: dto.remark,
+        },
+        include: { employee: true },
+      });
+
+      // 2. Auto-create expense record
+      const latest = await tx.expense.findFirst({
+        orderBy: { expenseCode: 'desc' },
+        select: { expenseCode: true },
+      });
+      const lastNumber = latest?.expenseCode
+        ? Number(latest.expenseCode.replace('EXP-', ''))
+        : 0;
+      const expenseCode = `EXP-${String(lastNumber + 1).padStart(4, '0')}`;
+
+      const expense = await tx.expense.create({
+        data: {
+          expenseCode,
+          category: 'Salary',
+          description: `Salary payment to ${employee.name}`,
+          amount: netSalary,
+          payment_method: PaymentType.CASH,
+          expense_date: paymentDate,
         },
       });
 
+      // 3. Create ledger entry for the expense (CREDIT = money out)
       await tx.ledgerEntry.create({
         data: {
-          entry_date: new Date(),
+          entry_date: paymentDate,
           type: LedgerType.CREDIT,
           category: LedgerCategory.SALARY,
-          reference_id: salary.id,
-          amount: totalPaid,
-          description: `Salary payment for employee ${dto.employee_id}`,
+          reference_id: expense.id,
+          amount: netSalary,
+          description: expense.description,
+          is_system_generated: true,
         },
       });
 
@@ -53,3 +86,4 @@ export class SalariesService {
     });
   }
 }
+
