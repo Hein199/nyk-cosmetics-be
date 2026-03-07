@@ -210,9 +210,15 @@ model DailyBalance {
 }
 
 model Employee {
-  id           Int           @id @default(autoincrement())
+  id           Int       @id @default(autoincrement())
   name         String
-  basic_salary Decimal       @db.Decimal(12, 2)
+  phone        String    @db.VarChar(20)
+  address      String?
+  position     String?   @db.VarChar(100)
+  basic_salary Decimal   @db.Decimal(12, 2)
+  start_date   DateTime? @db.Date
+  remark       String?
+  created_at   DateTime  @default(now())
 
   salaries SalaryRecord[]
 }
@@ -220,15 +226,20 @@ model Employee {
 model SalaryRecord {
   id               Int      @id @default(autoincrement())
   employee_id      Int
+  salary_month     String   @default("") @db.VarChar(7)
   basic_salary     Decimal  @db.Decimal(12, 2)
   bonus_amount     Decimal  @db.Decimal(12, 2)
+  bonus_types      Json?
   deduction_amount Decimal  @db.Decimal(12, 2)
-  total_paid       Decimal  @db.Decimal(12, 2)
+  net_salary       Decimal  @db.Decimal(12, 2)
+  payment_date     DateTime @default(now()) @db.Date
+  remark           String?
   created_at       DateTime @default(now())
 
   employee Employee @relation(fields: [employee_id], references: [id])
 
   @@index([employee_id])
+  @@index([salary_month])
 }
 
 model Category {
@@ -240,9 +251,11 @@ model Category {
 model Expense {
   id             Int         @id @default(autoincrement())
   expenseCode    String      @unique @db.VarChar(20)
+  category       String?     @db.VarChar(100)
   description    String
   amount         Decimal     @db.Decimal(12, 2)
   payment_method PaymentType
+  expense_date   DateTime    @default(now()) @db.Date
   created_at     DateTime    @default(now())
 }
 
