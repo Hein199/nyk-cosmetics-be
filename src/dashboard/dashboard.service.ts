@@ -45,7 +45,7 @@ export class DashboardService {
             recentOrders,
         ] = await Promise.all([
             this.prisma.order.aggregate({
-                where: { status: OrderStatus.DELIVERED },
+                where: { status: { in: [OrderStatus.CONFIRMED, OrderStatus.DELIVERED] } },
                 _sum: { total_amount: true },
             }),
             this.prisma.order.count({
@@ -111,7 +111,7 @@ export class DashboardService {
                     TO_CHAR(created_at AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD') AS date,
                     SUM(total_amount)::text                                         AS sales
                 FROM   "Order"
-                WHERE  status = 'DELIVERED'::"OrderStatus"
+                WHERE  status IN ('CONFIRMED'::"OrderStatus", 'DELIVERED'::"OrderStatus")
                   AND  created_at >= NOW() - INTERVAL '16 days'
                 GROUP  BY 1
                 ORDER  BY 1 ASC
@@ -132,7 +132,7 @@ export class DashboardService {
                     TO_CHAR(created_at AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM') AS month,
                     SUM(total_amount)::text                                     AS sales
                 FROM   "Order"
-                WHERE  status = 'DELIVERED'::"OrderStatus"
+                WHERE  status IN ('CONFIRMED'::"OrderStatus", 'DELIVERED'::"OrderStatus")
                   AND  created_at >= NOW() - INTERVAL '8 months'
                 GROUP  BY 1
                 ORDER  BY 1 ASC
@@ -169,7 +169,7 @@ export class DashboardService {
             FROM   "OrderItem" oi
             JOIN   "Order"   o ON oi.order_id   = o.id
             JOIN   "Product" p ON oi.product_id = p.id
-            WHERE  o.status     = 'DELIVERED'::"OrderStatus"
+            WHERE  o.status IN ('CONFIRMED'::"OrderStatus", 'DELIVERED'::"OrderStatus")
               AND  o.created_at >= NOW() - ${intervalSql}
             GROUP  BY p.name
             ORDER  BY ${orderSql} DESC
@@ -192,7 +192,7 @@ export class DashboardService {
                 SUM(o.total_amount)::text                                      AS revenue
             FROM   "Order"  o
             JOIN   "User"   u ON o.salesperson_user_id = u.id
-            WHERE  o.status     = 'DELIVERED'::"OrderStatus"
+            WHERE  o.status IN ('CONFIRMED'::"OrderStatus", 'DELIVERED'::"OrderStatus")
               AND  o.created_at >= NOW() - INTERVAL '4 months'
             GROUP  BY month_key, month_label, u.username
             ORDER  BY month_key ASC
@@ -235,7 +235,7 @@ export class DashboardService {
                     TO_CHAR(created_at AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD') AS date,
                     SUM(amount_paid)::text                                          AS income
                 FROM   "Payment"
-                WHERE  status      = 'CONFIRMED'::"PaymentStatus"
+                WHERE  status IN ('CONFIRMED'::"PaymentStatus", 'PENDING'::"PaymentStatus")
                   AND  created_at >= NOW() - INTERVAL '31 days'
                 GROUP  BY 1
                 ORDER  BY 1 ASC
