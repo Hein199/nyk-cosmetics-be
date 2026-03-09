@@ -56,10 +56,11 @@ model User {
   username      String        @unique
   password_hash String
   role          Role
-  full_name     String?
   email         String?
   phone_number  String?
   photo_url     String?
+  is_active     Boolean       @default(true)
+  remark        String?
   created_at    DateTime      @default(now())
 
   salesperson   Salesperson?
