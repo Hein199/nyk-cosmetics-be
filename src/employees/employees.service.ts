@@ -48,6 +48,8 @@ export class EmployeesService {
   async remove(id: number) {
     const employee = await this.prisma.employee.findUnique({ where: { id } });
     if (!employee) throw new NotFoundException('Employee not found');
+    // Delete related salary records first to avoid FK constraint violation
+    await this.prisma.salaryRecord.deleteMany({ where: { employee_id: id } });
     return this.prisma.employee.delete({ where: { id } });
   }
 }

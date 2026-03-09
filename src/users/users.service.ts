@@ -11,7 +11,16 @@ export class UsersService {
 
   findAll() {
     return this.prisma.user.findMany({
-      select: { id: true, username: true, role: true },
+      select: {
+        id: true,
+        username: true,
+        role: true,
+        phone_number: true,
+        is_active: true,
+        remark: true,
+        created_at: true,
+        salesperson: { select: { id: true, name: true, region: true, monthly_target: true } },
+      },
       orderBy: { username: 'asc' },
     });
   }
@@ -21,7 +30,7 @@ export class UsersService {
       where: { id },
       select: {
         id: true, username: true, role: true,
-        full_name: true, email: true, phone_number: true, photo_url: true, created_at: true,
+        email: true, phone_number: true, photo_url: true, created_at: true,
         salesperson: true,
       },
     });
@@ -50,6 +59,9 @@ export class UsersService {
           username: dto.username,
           password_hash: passwordHash,
           role: dto.role,
+          phone_number: dto.phone_number,
+          is_active: dto.is_active ?? true,
+          remark: dto.remark,
         },
       });
 
@@ -58,6 +70,7 @@ export class UsersService {
           data: {
             user_id: user.id,
             name: dto.salesperson_name || dto.username,
+            region: dto.region,
             monthly_target: monthlyTarget,
           },
         });
@@ -90,6 +103,15 @@ export class UsersService {
     if (dto.role) {
       data.role = dto.role;
     }
+    if (dto.phone_number !== undefined) {
+      data.phone_number = dto.phone_number;
+    }
+    if (dto.is_active !== undefined) {
+      data.is_active = dto.is_active;
+    }
+    if (dto.remark !== undefined) {
+      data.remark = dto.remark;
+    }
 
     const updated = await this.prisma.user.update({
       where: { id },
@@ -111,6 +133,7 @@ export class UsersService {
           where: { user_id: id },
           data: {
             ...(shouldUpdateName ? { name: nextName } : {}),
+            ...(dto.region !== undefined ? { region: dto.region } : {}),
             monthly_target: nextMonthlyTarget,
           },
         });
@@ -119,6 +142,7 @@ export class UsersService {
           data: {
             user_id: id,
             name: nextName,
+            region: dto.region,
             monthly_target: nextMonthlyTarget,
           },
         });
@@ -130,7 +154,15 @@ export class UsersService {
     return { id: updated.id, username: updated.username, role: updated.role };
   }
 
-  async updateProfile(id: number, dto: { full_name?: string; email?: string; phone_number?: string; photo_url?: string }) {
+  async remove(id: number) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException('User not found');
+    // Remove salesperson record first to avoid FK constraint
+    await this.prisma.salesperson.deleteMany({ where: { user_id: id } });
+    return this.prisma.user.delete({ where: { id } });
+  }
+
+  async updateProfile(id: number, dto: { email?: string; phone_number?: string; photo_url?: string }) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) {
       throw new NotFoundException('User not found');
@@ -138,14 +170,13 @@ export class UsersService {
     const updated = await this.prisma.user.update({
       where: { id },
       data: {
-        ...(dto.full_name !== undefined ? { full_name: dto.full_name } : {}),
         ...(dto.email !== undefined ? { email: dto.email } : {}),
         ...(dto.phone_number !== undefined ? { phone_number: dto.phone_number } : {}),
         ...(dto.photo_url !== undefined ? { photo_url: dto.photo_url } : {}),
       },
       select: {
         id: true, username: true, role: true,
-        full_name: true, email: true, phone_number: true, photo_url: true, created_at: true,
+        email: true, phone_number: true, photo_url: true, created_at: true,
         salesperson: true,
       },
     });
