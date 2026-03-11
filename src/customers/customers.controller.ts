@@ -38,4 +38,16 @@ export class CustomersController {
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateCustomerDto) {
     return this.customersService.update(id, dto);
   }
+
+  @Patch(':id/notes')
+  @Roles(Role.ADMIN)
+  updateNotes(@Param('id', ParseIntPipe) id: number, @Body('notes') notes: string) {
+    return this.customersService.updateNotes(id, notes);
+  }
+
+  @Get(':id/orders')
+  @Roles(Role.ADMIN, Role.SALESPERSON)
+  findOrders(@Param('id', ParseIntPipe) id: number) {
+    return this.customersService.findOrders(id);
+  }
 }

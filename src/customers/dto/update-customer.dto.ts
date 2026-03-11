@@ -17,4 +17,8 @@ export class UpdateCustomerDto {
   @IsOptional()
   @IsEnum(CustomerStatus)
   status?: CustomerStatus;
+
+  @IsOptional()
+  @IsString()
+  notes?: string;
 }
