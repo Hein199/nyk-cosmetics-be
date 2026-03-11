@@ -86,6 +86,7 @@ model Customer {
   phone_number String
   address      String
   status       CustomerStatus
+  notes        String?
 
   orders   Order[]
   payments Payment[]

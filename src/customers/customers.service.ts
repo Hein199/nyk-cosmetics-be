@@ -44,4 +44,35 @@ export class CustomersService {
     await this.findOne(id);
     return this.prisma.customer.update({ where: { id }, data: dto });
   }
+
+  async updateNotes(id: number, notes: string) {
+    await this.findOne(id);
+    return this.prisma.customer.update({ where: { id }, data: { notes } });
+  }
+
+  async findOrders(id: number) {
+    await this.findOne(id);
+    const orders = await this.prisma.order.findMany({
+      where: { customer_id: id },
+      include: {
+        loan: { select: { remaining_amount: true, status: true } },
+        payments: { select: { amount_paid: true } },
+      },
+      orderBy: { created_at: 'desc' },
+    });
+
+    return orders.map((order) => {
+      const total = Number(order.total_amount);
+      const remaining = order.loan ? Number(order.loan.remaining_amount) : 0;
+      const paid = total - remaining;
+      return {
+        id: order.id,
+        date: order.created_at.toISOString().split('T')[0],
+        status: order.status,
+        total_amount: total,
+        paid_amount: paid,
+        remaining_amount: remaining,
+      };
+    });
+  }
 }
