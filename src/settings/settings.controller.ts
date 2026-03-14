@@ -12,10 +12,8 @@ import { SettingsService } from './settings.service';
 export class SettingsController {
   constructor(private readonly settingsService: SettingsService) {}
 
-  // Public for all authenticated users — they need to read branding
+  // Public — branding info is not sensitive and needed on the login page
   @Get()
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(Role.ADMIN, Role.SALESPERSON)
   get() {
     return this.settingsService.get();
   }
