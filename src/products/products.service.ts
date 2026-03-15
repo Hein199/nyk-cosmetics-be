@@ -107,10 +107,10 @@ export class ProductsService {
         await tx.stockHistory.create({
           data: {
             product_id: id,
-            event: stockChange > 0 ? StockEvent.restock : StockEvent.adjustment,
+            event: dto.stockEvent ?? (stockChange > 0 ? StockEvent.restock : StockEvent.adjustment),
             change_quantity: stockChange,
             inventory_after: updated.inventory?.quantity ?? 0,
-            source: 'product:update',
+            source: dto.stockSource ?? 'product:update',
           },
         });
       }
