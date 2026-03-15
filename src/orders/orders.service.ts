@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { LoanStatus, OrderStatus, PaymentStatus, Prisma, Role, StockEvent } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
@@ -223,16 +223,17 @@ export class OrdersService {
     });
   }
 
-  async updateOrderItems(orderId: number, dto: UpdateOrderItemsDto) {
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
+  async updateOrderItems(user: { id: number; role: Role }, orderId: number, dto: UpdateOrderItemsDto) {
+    const order = await this.prisma.order.findFirst({
+      where: user.role === Role.ADMIN ? { id: orderId } : { id: orderId, salesperson_user_id: user.id },
       include: { items: true },
     });
     if (!order) {
       throw new NotFoundException('Order not found');
     }
-    if (order.status !== OrderStatus.PENDING_ADMIN) {
-      throw new BadRequestException('Only pending orders can be edited');
+
+    if (user.role === Role.SALESPERSON && order.status !== OrderStatus.PENDING_ADMIN) {
+      throw new ForbiddenException('Salespersons can only edit pending orders');
     }
 
     const existingItemIds = new Set(order.items.map((i) => i.id));
