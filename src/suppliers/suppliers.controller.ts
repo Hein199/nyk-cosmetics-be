@@ -27,6 +27,21 @@ export class SuppliersController {
         return this.suppliersService.findOne(id);
     }
 
+    @Get(':id/purchases')
+    @Roles(Role.ADMIN)
+    findPurchases(@Param('id', ParseIntPipe) id: number) {
+        return this.suppliersService.findPurchases(id);
+    }
+
+    @Get(':id/purchases/:expenseId')
+    @Roles(Role.ADMIN)
+    findPurchaseDetail(
+        @Param('id', ParseIntPipe) id: number,
+        @Param('expenseId', ParseIntPipe) expenseId: number,
+    ) {
+        return this.suppliersService.findPurchaseDetail(id, expenseId);
+    }
+
     @Post()
     @Roles(Role.ADMIN)
     create(@Body() dto: CreateSupplierDto) {

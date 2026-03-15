@@ -13,11 +13,11 @@ import { CreateCategoryDto } from './dto/create-category.dto';
 export class CategoriesService {
   private readonly logger = new Logger(CategoriesService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async findAll() {
     try {
-      return await this.prisma.category.findMany({ orderBy: { name: 'asc' } });
+      return await this.prisma.category.findMany({ orderBy: { created_at: 'desc' } });
     } catch (error) {
       this.logger.error('findAll failed', error);
       throw new InternalServerErrorException(error?.message ?? 'Failed to fetch categories');
