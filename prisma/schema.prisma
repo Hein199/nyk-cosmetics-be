@@ -51,6 +51,13 @@ enum LedgerCategory {
   OTHER_INCOME
 }
 
+enum StockEvent {
+  order
+  restock
+  adjustment
+  return
+}
+
 model User {
   id            Int           @id @default(autoincrement())
   username      String        @unique
@@ -106,8 +113,9 @@ model Product {
   photo_url     String
   is_active     Boolean         @default(true)
 
-  inventory  Inventory?
-  orderItems OrderItem[]
+  inventory     Inventory?
+  orderItems    OrderItem[]
+  stockHistory  StockHistory[]
 
   @@index([category])
   @@index([is_active])
@@ -118,6 +126,21 @@ model Inventory {
   quantity   Int
 
   product Product @relation(fields: [product_id], references: [id])
+}
+
+model StockHistory {
+  id              Int         @id @default(autoincrement())
+  product_id      Int
+  event           StockEvent
+  change_quantity Int
+  inventory_after Int
+  source          String?
+  created_at      DateTime    @default(now())
+
+  product Product @relation(fields: [product_id], references: [id])
+
+  @@index([product_id])
+  @@index([created_at])
 }
 
 model Order {
@@ -250,6 +273,18 @@ model Category {
   created_at DateTime @default(now())
 }
 
+model Supplier {
+  id           Int      @id @default(autoincrement())
+  name         String
+  phone_number String
+  address      String
+  created_at   DateTime @default(now())
+
+  expenses Expense[]
+
+  @@index([phone_number])
+}
+
 model Expense {
   id             Int         @id @default(autoincrement())
   expenseCode    String      @unique @db.VarChar(20)
@@ -259,6 +294,11 @@ model Expense {
   payment_method PaymentType
   expense_date   DateTime    @default(now()) @db.Date
   created_at     DateTime    @default(now())
+
+  supplier_id Int?
+  supplier    Supplier? @relation(fields: [supplier_id], references: [id])
+
+  @@index([supplier_id])
 }
 
 model SystemSettings {

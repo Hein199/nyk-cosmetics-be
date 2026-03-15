@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { LoanStatus, OrderStatus, PaymentStatus, Prisma, Role } from '@prisma/client';
+import { LoanStatus, OrderStatus, PaymentStatus, Prisma, Role, StockEvent } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderItemsDto } from './dto/update-order-items.dto';
@@ -195,12 +195,23 @@ export class OrdersService {
 
       // Batch update inventory using actual piece deductions (once per product)
       await Promise.all(
-        Array.from(deductionMap.entries()).map(([productId, deduction]) =>
-          tx.inventory.update({
+        Array.from(deductionMap.entries()).map(async ([productId, deduction]) => {
+          const updatedInventory = await tx.inventory.update({
             where: { product_id: productId },
             data: { quantity: { decrement: deduction } },
-          })
-        )
+            select: { quantity: true },
+          });
+
+          await tx.stockHistory.create({
+            data: {
+              product_id: productId,
+              event: StockEvent.order,
+              change_quantity: -deduction,
+              inventory_after: updatedInventory.quantity,
+              source: `order:${orderId}`,
+            },
+          });
+        })
       );
 
       const updated = await tx.order.update({
