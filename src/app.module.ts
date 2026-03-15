@@ -12,8 +12,10 @@ import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ProductsModule } from './products/products.module';
+import { PurchasesModule } from './purchases/purchases.module';
 import { SalariesModule } from './salaries/salaries.module';
 import { SettingsModule } from './settings/settings.module';
+import { SuppliersModule } from './suppliers/suppliers.module';
 import { UploadModule } from './upload/upload.module';
 import { UsersModule } from './users/users.module';
 
@@ -26,6 +28,8 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     CustomersModule,
     ProductsModule,
+    PurchasesModule,
+    SuppliersModule,
     InventoryModule,
     OrdersModule,
     PaymentsModule,

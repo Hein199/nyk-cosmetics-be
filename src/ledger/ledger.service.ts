@@ -5,7 +5,7 @@ import { CreateLedgerEntryDto } from './dto/create-ledger-entry.dto';
 
 @Injectable()
 export class LedgerService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   async findAll(from?: string, to?: string) {
     const where: Prisma.LedgerEntryWhereInput = {};
@@ -49,14 +49,21 @@ export class LedgerService {
       .filter((e) => e.category === LedgerCategory.EXPENSE && e.reference_id !== 0)
       .map((e) => e.reference_id);
 
-    const expenseMap = new Map<number, { expenseCode: string }>();
+    const expenseMap = new Map<number, { expenseCode: string; supplier_name: string | null }>();
     if (expenseRefIds.length > 0) {
       const expenses = await this.prisma.expense.findMany({
         where: { id: { in: expenseRefIds } },
-        select: { id: true, expenseCode: true },
+        select: {
+          id: true,
+          expenseCode: true,
+          supplier: { select: { name: true } },
+        },
       });
       for (const ex of expenses) {
-        expenseMap.set(ex.id, { expenseCode: ex.expenseCode });
+        expenseMap.set(ex.id, {
+          expenseCode: ex.expenseCode,
+          supplier_name: ex.supplier?.name ?? null,
+        });
       }
     }
 
@@ -74,7 +81,11 @@ export class LedgerService {
         }
       } else if (e.category === LedgerCategory.EXPENSE && !isManual) {
         const info = expenseMap.get(e.reference_id);
-        reference_label = info?.expenseCode ?? `Expense #${e.reference_id}`;
+        if (info?.supplier_name) {
+          reference_label = `${info.supplier_name} - ${info.expenseCode}`;
+        } else {
+          reference_label = info?.expenseCode ?? `Expense #${e.reference_id}`;
+        }
       } else if (e.category === LedgerCategory.OTHER_INCOME && !isManual) {
         reference_label = `Payment #${e.reference_id}`;
       }
