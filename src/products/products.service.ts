@@ -11,7 +11,7 @@ export class ProductsService {
   findAll() {
     return this.prisma.product.findMany({
       include: { inventory: true },
-      orderBy: { name: 'asc' },
+      orderBy: { id: 'desc' },
     });
   }
 

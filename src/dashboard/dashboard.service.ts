@@ -62,7 +62,7 @@ export class DashboardService {
                     inventory: { quantity: { lt: 20 } },
                 },
                 include: { inventory: true },
-                orderBy: { name: 'asc' },
+                orderBy: { id: 'desc' },
                 take: 10,
             }),
             this.prisma.order.findMany({

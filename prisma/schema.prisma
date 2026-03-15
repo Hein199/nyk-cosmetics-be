@@ -120,6 +120,7 @@ model Product {
 
   inventory  Inventory?
   orderItems OrderItem[]
+  purchaseItems PurchaseItem[]
 
   @@index([category])
   @@index([is_active])
@@ -273,9 +274,28 @@ model Expense {
   expense_date   DateTime    @default(now()) @db.Date
   created_at     DateTime    @default(now())
 
-  supplier Supplier? @relation(fields: [supplier_id], references: [id], onDelete: SetNull)
+  supplier       Supplier?      @relation(fields: [supplier_id], references: [id], onDelete: SetNull)
+  purchase_items PurchaseItem[]
 
   @@index([supplier_id])
+}
+
+model PurchaseItem {
+  id           Int      @id @default(autoincrement())
+  expense_id   Int
+  product_id   Int
+  quantity     Int
+  unit_type    String   @default("Pcs")
+  quantity_pcs Int
+  unit_price   Decimal  @db.Decimal(12, 2)
+  line_total   Decimal  @db.Decimal(12, 2)
+  created_at   DateTime @default(now())
+
+  expense Expense @relation(fields: [expense_id], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [product_id], references: [id])
+
+  @@index([expense_id])
+  @@index([product_id])
 }
 
 model SystemSettings {

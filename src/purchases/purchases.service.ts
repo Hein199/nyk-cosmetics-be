@@ -10,6 +10,7 @@ type PurchaseLine = {
     quantityInPcs: number;
     unitType: 'Pcs' | 'D' | 'P';
     unitPrice: Prisma.Decimal;
+    lineTotal: Prisma.Decimal;
 };
 
 @Injectable()
@@ -89,6 +90,7 @@ export class PurchasesService {
                     quantityInPcs,
                     unitType,
                     unitPrice: new Prisma.Decimal(item.unit_price),
+                    lineTotal: new Prisma.Decimal(item.unit_price).mul(item.quantity),
                 };
             });
 
@@ -108,7 +110,7 @@ export class PurchasesService {
             );
 
             const totalAmount = lines.reduce(
-                (sum, line) => sum.plus(line.unitPrice.mul(line.quantity)),
+                (sum, line) => sum.plus(line.lineTotal),
                 new Prisma.Decimal(0),
             );
 
@@ -147,6 +149,38 @@ export class PurchasesService {
                 } as Prisma.ExpenseUncheckedCreateInput,
             });
 
+            const purchaseItemDelegate = (tx as Prisma.TransactionClient & {
+                purchaseItem: {
+                    create: (args: {
+                        data: {
+                            expense_id: number;
+                            product_id: number;
+                            quantity: number;
+                            unit_type: string;
+                            quantity_pcs: number;
+                            unit_price: Prisma.Decimal;
+                            line_total: Prisma.Decimal;
+                        };
+                    }) => Promise<unknown>;
+                };
+            }).purchaseItem;
+
+            await Promise.all(
+                lines.map((line) =>
+                    purchaseItemDelegate.create({
+                        data: {
+                            expense_id: expense.id,
+                            product_id: line.productId,
+                            quantity: line.quantity,
+                            unit_type: line.unitType,
+                            quantity_pcs: line.quantityInPcs,
+                            unit_price: line.unitPrice,
+                            line_total: line.lineTotal,
+                        },
+                    }),
+                ),
+            );
+
             await tx.ledgerEntry.create({
                 data: {
                     entry_date: purchaseDate,
@@ -180,7 +214,7 @@ export class PurchasesService {
                     quantity_added: line.quantityInPcs,
                     quantity_added_pcs: line.quantityInPcs,
                     unit_price: line.unitPrice.toString(),
-                    line_total: line.unitPrice.mul(line.quantity).toString(),
+                    line_total: line.lineTotal.toString(),
                     quantity_after: inventoryMap.get(line.productId) ?? 0,
                 })),
             };

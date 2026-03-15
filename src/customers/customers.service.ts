@@ -10,7 +10,7 @@ export class CustomersService {
 
   async findAll() {
     const customers = await this.prisma.customer.findMany({
-      orderBy: { name: 'asc' },
+      orderBy: { id: 'desc' },
       include: {
         loans: {
           select: { remaining_amount: true, status: true },

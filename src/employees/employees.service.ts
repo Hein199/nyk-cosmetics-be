@@ -6,10 +6,10 @@ import { UpdateEmployeeDto } from './dto/update-employee.dto';
 
 @Injectable()
 export class EmployeesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
 
   findAll() {
-    return this.prisma.employee.findMany({ orderBy: { name: 'asc' } });
+    return this.prisma.employee.findMany({ orderBy: { created_at: 'desc' } });
   }
 
   create(dto: CreateEmployeeDto) {

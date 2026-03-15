@@ -21,7 +21,7 @@ export class UsersService {
         created_at: true,
         salesperson: { select: { id: true, name: true, region: true, monthly_target: true } },
       },
-      orderBy: { username: 'asc' },
+      orderBy: { created_at: 'desc' },
     });
   }
 
