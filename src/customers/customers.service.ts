@@ -1,15 +1,34 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { LoanStatus } from '@prisma/client';
+import { LoanStatus, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
+
+function toLocalDateYmd(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
 
 @Injectable()
 export class CustomersService {
   constructor(private readonly prisma: PrismaService) { }
 
-  async findAll() {
+  async findAll(user: { id: number; role: Role }) {
+    const where: Prisma.CustomerWhereInput =
+      user.role === Role.SALESPERSON
+        ? {
+            orders: {
+              some: {
+                salesperson_user_id: user.id,
+              },
+            },
+          }
+        : {};
+
     const customers = await this.prisma.customer.findMany({
+      where,
       orderBy: { id: 'desc' },
       include: {
         loans: {
@@ -67,7 +86,7 @@ export class CustomersService {
       const paid = total - remaining;
       return {
         id: order.id,
-        date: order.created_at.toISOString().split('T')[0],
+        date: toLocalDateYmd(order.created_at),
         status: order.status,
         total_amount: total,
         paid_amount: paid,

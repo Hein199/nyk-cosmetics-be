@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseIntPipe, Patch, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -17,8 +17,8 @@ export class CustomersController {
 
   @Get()
   @Roles(Role.ADMIN, Role.SALESPERSON)
-  findAll() {
-    return this.customersService.findAll();
+  findAll(@Req() req: any) {
+    return this.customersService.findAll(req.user);
   }
 
   @Get(':id')

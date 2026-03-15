@@ -3,6 +3,11 @@ import { LedgerCategory, LedgerType, PaymentType, Prisma, StockEvent } from '@pr
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 
+function parseLocalDate(value: string): Date {
+    const [year, month, day] = value.split('-').map(Number);
+    return new Date(year, month - 1, day);
+}
+
 type PurchaseLine = {
     productId: number;
     productName: string;
@@ -63,7 +68,7 @@ export class PurchasesService {
             }
 
             const productMap = new Map(products.map((product) => [product.id, product]));
-            const purchaseDate = dto.purchase_date ? new Date(dto.purchase_date) : new Date();
+            const purchaseDate = dto.purchase_date ? parseLocalDate(dto.purchase_date) : new Date();
 
             const lines: PurchaseLine[] = dto.items.map((item) => {
                 const product = productMap.get(item.product_id);

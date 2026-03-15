@@ -157,6 +157,20 @@ export class UsersService {
   async remove(id: number) {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (!user) throw new NotFoundException('User not found');
+
+    if (user.role === Role.SALESPERSON) {
+      return this.prisma.user.update({
+        where: { id },
+        data: { is_active: false },
+        select: {
+          id: true,
+          username: true,
+          role: true,
+          is_active: true,
+        },
+      });
+    }
+
     // Remove salesperson record first to avoid FK constraint
     await this.prisma.salesperson.deleteMany({ where: { user_id: id } });
     return this.prisma.user.delete({ where: { id } });

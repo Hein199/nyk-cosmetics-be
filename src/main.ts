@@ -1,6 +1,3 @@
-// Set server timezone to Asia/Bangkok (UTC+7) before any Date operations
-process.env.TZ = 'Asia/Bangkok';
-
 import 'dotenv/config';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';

@@ -2,23 +2,23 @@ import { Injectable } from '@nestjs/common';
 import { OrderStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-// ── Bangkok timezone helper ────────────────────────────────────────────────────
-const BKK_MS = 7 * 60 * 60 * 1000;
+// ── Local timezone helpers ───────────────────────────────────────────────────
+const APP_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
-/** Returns a Date whose UTC fields represent the current Bangkok calendar date/time */
-function bkkNow(): Date {
-    return new Date(Date.now() + BKK_MS);
+function localNow(): Date {
+    return new Date();
 }
 
 function isoDate(d: Date): string {
-    return d.toISOString().slice(0, 10);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 // ── Row types for raw queries ─────────────────────────────────────────────────
-// NOTE: DATE columns must be fetched as strings via TO_CHAR to avoid the pg
-// driver constructing a Date via `new Date(y, m, d)` (local-time), which on a
-// Bangkok-timezone machine shifts every date to the previous UTC day, breaking
-// the map key lookup and zeroing out all chart values.
+// NOTE: DATE columns are fetched as strings via TO_CHAR to avoid driver
+// date parsing shifts and keep map keys stable across environments.
 interface DailyRow { date: string; sales: string }
 interface MonthRow { month: string; sales: string }
 interface ProductRow { name: string; revenue: string; quantity: string }
@@ -100,7 +100,7 @@ export class DashboardService {
 
     // ── Sales chart ────────────────────────────────────────────────────────────
     async getSalesChart(mode: 'daily' | 'monthly') {
-        const now = bkkNow();
+        const now = localNow();
 
         if (mode === 'daily') {
             // Use TO_CHAR instead of DATE() to get a guaranteed 'YYYY-MM-DD' string.
@@ -108,7 +108,7 @@ export class DashboardService {
             // shifting every date one day back on a Bangkok-timezone Node process.
             const rows = await this.prisma.$queryRaw<DailyRow[]>`
                 SELECT
-                    TO_CHAR(created_at AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD') AS date,
+                                        TO_CHAR(created_at AT TIME ZONE ${APP_TZ}, 'YYYY-MM-DD') AS date,
                     SUM(total_amount)::text                                         AS sales
                 FROM   "Order"
                 WHERE  status IN ('CONFIRMED'::"OrderStatus", 'DELIVERED'::"OrderStatus")
@@ -121,15 +121,17 @@ export class DashboardService {
             const map = new Map(rows.map((r) => [r.date.slice(0, 10), Number(r.sales)]));
 
             return Array.from({ length: 14 }, (_, i) => {
-                const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (13 - i)));
-                const key = isoDate(d); // isoDate uses .toISOString() which is always UTC
-                const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+                const d = new Date(now);
+                d.setHours(0, 0, 0, 0);
+                d.setDate(now.getDate() - (13 - i));
+                const key = isoDate(d);
+                const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
                 return { label, sales: map.get(key) ?? 0 };
             });
         } else {
             const rows = await this.prisma.$queryRaw<MonthRow[]>`
                 SELECT
-                    TO_CHAR(created_at AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM') AS month,
+                    TO_CHAR(created_at AT TIME ZONE ${APP_TZ}, 'YYYY-MM') AS month,
                     SUM(total_amount)::text                                     AS sales
                 FROM   "Order"
                 WHERE  status IN ('CONFIRMED'::"OrderStatus", 'DELIVERED'::"OrderStatus")
@@ -142,10 +144,9 @@ export class DashboardService {
 
             // Build last 7 months as YYYY-MM keys using bkkNow UTC components
             return Array.from({ length: 7 }, (_, i) => {
-                // Subtract months from bkkNow; Date.UTC handles month underflow correctly
-                const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - (6 - i), 1));
+                const d = new Date(now.getFullYear(), now.getMonth() - (6 - i), 1);
                 const key = isoDate(d).slice(0, 7); // 'YYYY-MM'
-                const label = d.toLocaleDateString('en-US', { month: 'short', timeZone: 'UTC' });
+                const label = d.toLocaleDateString('en-US', { month: 'short' });
                 return { label, sales: map.get(key) ?? 0 };
             });
         }
@@ -186,8 +187,8 @@ export class DashboardService {
     async getSalespersonPerformance() {
         const rows = await this.prisma.$queryRaw<SalespersonRow[]>`
             SELECT
-                TO_CHAR(o.created_at AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM') AS month_key,
-                TO_CHAR(o.created_at AT TIME ZONE 'Asia/Bangkok', 'Mon')     AS month_label,
+                TO_CHAR(o.created_at AT TIME ZONE ${APP_TZ}, 'YYYY-MM') AS month_key,
+                TO_CHAR(o.created_at AT TIME ZONE ${APP_TZ}, 'Mon')     AS month_label,
                 u.username                                                     AS salesperson,
                 SUM(o.total_amount)::text                                      AS revenue
             FROM   "Order"  o
@@ -227,12 +228,12 @@ export class DashboardService {
 
     // ── Cash flow (last 30 days) ───────────────────────────────────────────────
     async getCashFlow() {
-        const now = bkkNow();
+        const now = localNow();
 
         const [incomeRows, expenseRows] = await Promise.all([
             this.prisma.$queryRaw<IncomeRow[]>`
                 SELECT
-                    TO_CHAR(created_at AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD') AS date,
+                                        TO_CHAR(created_at AT TIME ZONE ${APP_TZ}, 'YYYY-MM-DD') AS date,
                     SUM(amount_paid)::text                                          AS income
                 FROM   "Payment"
                 WHERE  status IN ('CONFIRMED'::"PaymentStatus", 'PENDING'::"PaymentStatus")
@@ -242,7 +243,7 @@ export class DashboardService {
             `,
             this.prisma.$queryRaw<ExpenseRow[]>`
                 SELECT
-                    TO_CHAR(created_at AT TIME ZONE 'Asia/Bangkok', 'YYYY-MM-DD') AS date,
+                    TO_CHAR(created_at AT TIME ZONE ${APP_TZ}, 'YYYY-MM-DD') AS date,
                     SUM(amount)::text                                               AS expense
                 FROM   "Expense"
                 WHERE  created_at >= NOW() - INTERVAL '31 days'
@@ -256,9 +257,11 @@ export class DashboardService {
         const expenseMap = new Map(expenseRows.map((r) => [r.date.slice(0, 10), Number(r.expense)]));
 
         return Array.from({ length: 30 }, (_, i) => {
-            const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - (29 - i)));
+            const d = new Date(now);
+            d.setHours(0, 0, 0, 0);
+            d.setDate(now.getDate() - (29 - i));
             const key = isoDate(d);
-            const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+            const label = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
             return {
                 label,
                 'Cash In': incomeMap.get(key) ?? 0,

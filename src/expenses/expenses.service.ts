@@ -3,6 +3,11 @@ import { LedgerCategory, LedgerType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
 
+function parseLocalDate(value: string): Date {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
 @Injectable()
 export class ExpensesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -22,7 +27,7 @@ export class ExpensesService {
         : 0;
       const nextNumber = lastNumber + 1;
       const expenseCode = `EXP-${String(nextNumber).padStart(4, '0')}`;
-      const expenseDate = dto.expense_date ? new Date(dto.expense_date) : new Date();
+      const expenseDate = dto.expense_date ? parseLocalDate(dto.expense_date) : new Date();
 
       const expense = await tx.expense.create({
         data: {
