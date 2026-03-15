@@ -141,18 +141,43 @@ export class PaymentsService {
       if (!payment) {
         throw new NotFoundException('Payment not found');
       }
-      // Idempotency: if already confirmed, do nothing (no duplicate ledger entry)
+
+      const ledgerCategory = payment.order_id ? LedgerCategory.SALE : LedgerCategory.OTHER_INCOME;
+
+      // Category-aware idempotency check.
+      const existingEntry = await tx.ledgerEntry.findFirst({
+        where: {
+          reference_id: payment.id,
+          category: ledgerCategory,
+          type: LedgerType.DEBIT,
+        },
+      });
+
+      const description = payment.order
+        ? `${payment.customer.name} - Order #${payment.order.id}`
+        : `${payment.customer.name} - Walk-in payment`;
+
+      // Self-heal: if payment is already confirmed but ledger entry is missing, create it.
       if (payment.status === PaymentStatus.CONFIRMED) {
+        if (!existingEntry) {
+          await tx.ledgerEntry.create({
+            data: {
+              entry_date: new Date(),
+              type: LedgerType.DEBIT,
+              category: ledgerCategory,
+              reference_id: payment.id,
+              amount: payment.amount_paid,
+              description,
+              is_system_generated: true,
+            },
+          });
+        }
         return payment;
       }
+
       if (payment.status !== PaymentStatus.PENDING) {
         throw new BadRequestException('Only pending payments can be confirmed');
       }
-
-      // Check for existing ledger entry to ensure idempotency
-      const existingEntry = await tx.ledgerEntry.findFirst({
-        where: { reference_id: payment.id },
-      });
 
       const updatedPayment = await tx.payment.update({
         where: { id: paymentId },
@@ -160,15 +185,11 @@ export class PaymentsService {
       });
 
       if (!existingEntry) {
-        const description = payment.order
-          ? `${payment.customer.name} - Order #${payment.order.id}`
-          : `${payment.customer.name} - Walk-in payment`;
-
         await tx.ledgerEntry.create({
           data: {
             entry_date: new Date(),
             type: LedgerType.DEBIT,
-            category: payment.order_id ? LedgerCategory.SALE : LedgerCategory.OTHER_INCOME,
+            category: ledgerCategory,
             reference_id: payment.id,
             amount: payment.amount_paid,
             description,

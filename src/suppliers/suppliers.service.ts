@@ -4,6 +4,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
 import { UpdateSupplierDto } from './dto/update-supplier.dto';
 
+function toLocalDateYmd(date: Date): string {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
 type SupplierRecord = {
     id: number;
     name: string;
@@ -140,7 +147,7 @@ export class SuppliersService {
 
         return purchases.map((purchase) => ({
             id: purchase.id,
-            date: purchase.expense_date.toISOString().split('T')[0],
+            date: toLocalDateYmd(purchase.expense_date),
             expense_code: purchase.expenseCode,
             category: purchase.category,
             description: purchase.description,
@@ -175,7 +182,7 @@ export class SuppliersService {
 
         return {
             id: purchase.id,
-            date: purchase.expense_date.toISOString().split('T')[0],
+            date: toLocalDateYmd(purchase.expense_date),
             expense_code: purchase.expenseCode,
             category: purchase.category,
             description: purchase.description,

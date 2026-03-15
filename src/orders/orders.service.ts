@@ -138,7 +138,6 @@ export class OrdersService {
           salesperson_user_id: userId,
           total_amount: total,
           status: OrderStatus.PENDING_ADMIN,
-          created_at: dto.order_date ? new Date(dto.order_date) : undefined,
           payment_type: dto.payment_type,
           remark: dto.remark,
           items: { create: itemsData },

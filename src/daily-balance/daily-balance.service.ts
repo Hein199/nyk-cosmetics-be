@@ -7,13 +7,17 @@ export class DailyBalanceService {
   constructor(private readonly prisma: PrismaService) {}
 
   private parseDate(date?: string) {
+    const toLocalDate = (value: string) => {
+      const [year, month, day] = value.split('-').map(Number);
+      return new Date(year, month - 1, day);
+    };
+
     if (!date) {
-      // Bangkok today midnight
-      const todayBkk = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Bangkok' }).format(new Date());
-      return new Date(`${todayBkk}T00:00:00+07:00`);
+      const now = new Date();
+      return new Date(now.getFullYear(), now.getMonth(), now.getDate());
     }
-    // Interpret date string as Bangkok midnight (UTC+7)
-    return new Date(`${date}T00:00:00+07:00`);
+
+    return toLocalDate(date);
   }
 
   async closeDay(date?: string) {

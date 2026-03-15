@@ -3,6 +3,11 @@ import { LedgerCategory, LedgerType, PaymentType, Prisma } from '@prisma/client'
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSalaryDto } from './dto/create-salary.dto';
 
+function parseLocalDate(value: string): Date {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
 @Injectable()
 export class SalariesService {
   constructor(private readonly prisma: PrismaService) {}
@@ -29,7 +34,7 @@ export class SalariesService {
     );
 
     const netSalary = basicSalary.plus(totalBonusAmount);
-    const paymentDate = new Date(dto.payment_date);
+    const paymentDate = parseLocalDate(dto.payment_date);
 
     return this.prisma.$transaction(async (tx) => {
       // 1. Create salary record

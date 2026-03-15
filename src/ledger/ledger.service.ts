@@ -3,6 +3,11 @@ import { LedgerCategory, LedgerType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateLedgerEntryDto } from './dto/create-ledger-entry.dto';
 
+function parseLocalDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
 @Injectable()
 export class LedgerService {
   constructor(private readonly prisma: PrismaService) { }
@@ -12,49 +17,63 @@ export class LedgerService {
     if (from || to) {
       where.entry_date = {};
       if (from) {
-        // Parse as Bangkok midnight (UTC+7) to avoid off-by-7h UTC shift
-        (where.entry_date as Prisma.DateTimeFilter).gte = new Date(`${from}T00:00:00+07:00`);
+        (where.entry_date as Prisma.DateTimeFilter).gte = parseLocalDate(from);
       }
       if (to) {
-        (where.entry_date as Prisma.DateTimeFilter).lte = new Date(`${to}T23:59:59.999+07:00`);
+        const endOfDay = parseLocalDate(to);
+        endOfDay.setHours(23, 59, 59, 999);
+        (where.entry_date as Prisma.DateTimeFilter).lte = endOfDay;
       }
     }
 
     const entries = await this.prisma.ledgerEntry.findMany({
       where,
-      orderBy: [{ entry_date: 'desc' }, { id: 'desc' }],
+      orderBy: [{ id: 'desc' }],
     });
 
     // Enrich payment entries (SALE category) with customer name + order id
     const paymentRefIds = entries
-      .filter((e) => e.category === LedgerCategory.SALE && e.reference_id !== 0)
+      .filter(
+        (e) =>
+          (e.category === LedgerCategory.SALE || e.category === LedgerCategory.OTHER_INCOME) &&
+          e.reference_id !== 0,
+      )
       .map((e) => e.reference_id);
 
-    const paymentMap = new Map<number, { customer_name: string; order_id: number | null }>();
+    const paymentMap = new Map<number, { customer_name: string; order_id: number | null; created_at: Date }>();
     if (paymentRefIds.length > 0) {
       const payments = await this.prisma.payment.findMany({
         where: { id: { in: paymentRefIds } },
-        include: { customer: { select: { name: true } }, order: { select: { id: true } } },
+        include: {
+          customer: { select: { name: true } },
+          order: { select: { id: true } },
+        },
       });
       for (const p of payments) {
         paymentMap.set(p.id, {
           customer_name: p.customer.name,
           order_id: p.order?.id ?? null,
+          created_at: p.created_at,
         });
       }
     }
 
     // Enrich expense entries with expense code
     const expenseRefIds = entries
-      .filter((e) => e.category === LedgerCategory.EXPENSE && e.reference_id !== 0)
+      .filter(
+        (e) =>
+          (e.category === LedgerCategory.EXPENSE || e.category === LedgerCategory.SALARY) &&
+          e.reference_id !== 0,
+      )
       .map((e) => e.reference_id);
 
-    const expenseMap = new Map<number, { expenseCode: string; supplier_name: string | null }>();
+    const expenseMap = new Map<number, { expenseCode: string; supplier_name: string | null; created_at: Date }>();
     if (expenseRefIds.length > 0) {
       const expenses = await this.prisma.expense.findMany({
         where: { id: { in: expenseRefIds } },
         select: {
           id: true,
+          created_at: true,
           expenseCode: true,
           supplier: { select: { name: true } },
         },
@@ -63,11 +82,12 @@ export class LedgerService {
         expenseMap.set(ex.id, {
           expenseCode: ex.expenseCode,
           supplier_name: ex.supplier?.name ?? null,
+          created_at: ex.created_at,
         });
       }
     }
 
-    return entries.map((e) => {
+    const enriched = entries.map((e) => {
       const isManual = e.reference_id === 0;
       let reference_label: string | null = null;
       let entry_source: 'system' | 'manual' = isManual ? 'manual' : 'system';
@@ -79,7 +99,7 @@ export class LedgerService {
             ? `${info.customer_name} - Order #${info.order_id}`
             : info.customer_name;
         }
-      } else if (e.category === LedgerCategory.EXPENSE && !isManual) {
+      } else if ((e.category === LedgerCategory.EXPENSE || e.category === LedgerCategory.SALARY) && !isManual) {
         const info = expenseMap.get(e.reference_id);
         if (info?.supplier_name) {
           reference_label = `${info.supplier_name} - ${info.expenseCode}`;
@@ -92,9 +112,27 @@ export class LedgerService {
 
       return {
         ...e,
+        display_date:
+          !isManual &&
+          (e.category === LedgerCategory.SALE || e.category === LedgerCategory.OTHER_INCOME)
+            ? paymentMap.get(e.reference_id)?.created_at ?? e.entry_date
+            : e.entry_date,
+        sort_datetime:
+          !isManual &&
+          (e.category === LedgerCategory.SALE || e.category === LedgerCategory.OTHER_INCOME)
+            ? paymentMap.get(e.reference_id)?.created_at ?? e.entry_date
+            : !isManual && (e.category === LedgerCategory.EXPENSE || e.category === LedgerCategory.SALARY)
+              ? expenseMap.get(e.reference_id)?.created_at ?? e.entry_date
+              : e.entry_date,
         reference_label,
         entry_source,
       };
+    });
+
+    return enriched.sort((a, b) => {
+      const diff = new Date(b.sort_datetime).getTime() - new Date(a.sort_datetime).getTime();
+      if (diff !== 0) return diff;
+      return b.id - a.id;
     });
   }
 
@@ -108,7 +146,7 @@ export class LedgerService {
 
     return this.prisma.ledgerEntry.create({
       data: {
-        entry_date: new Date(dto.entry_date),
+        entry_date: parseLocalDate(dto.entry_date),
         type,
         category: LedgerCategory.OTHER_INCOME,
         reference_id: 0,
@@ -135,7 +173,7 @@ export class LedgerService {
     return this.prisma.ledgerEntry.update({
       where: { id },
       data: {
-        entry_date: new Date(dto.entry_date),
+        entry_date: parseLocalDate(dto.entry_date),
         type,
         amount,
         description: dto.description,
@@ -153,7 +191,7 @@ export class LedgerService {
   }
 
   async getDailySummary(date: string) {
-    const entryDate = new Date(date);
+    const entryDate = parseLocalDate(date);
 
     const [debitAgg, creditAgg, dailyBalance] = await Promise.all([
       this.prisma.ledgerEntry.aggregate({

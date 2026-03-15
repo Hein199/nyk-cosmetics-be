@@ -4,6 +4,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateEmployeeDto } from './dto/create-employee.dto';
 import { UpdateEmployeeDto } from './dto/update-employee.dto';
 
+function parseLocalDate(value: string): Date {
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
 @Injectable()
 export class EmployeesService {
   constructor(private readonly prisma: PrismaService) { }
@@ -20,7 +25,7 @@ export class EmployeesService {
         address: dto.address,
         position: dto.position,
         basic_salary: new Prisma.Decimal(dto.basic_salary),
-        start_date: dto.start_date ? new Date(dto.start_date) : null,
+        start_date: dto.start_date ? parseLocalDate(dto.start_date) : null,
         remark: dto.remark,
       },
     });
@@ -39,7 +44,7 @@ export class EmployeesService {
         basic_salary: dto.basic_salary
           ? new Prisma.Decimal(dto.basic_salary)
           : undefined,
-        start_date: dto.start_date ? new Date(dto.start_date) : undefined,
+        start_date: dto.start_date ? parseLocalDate(dto.start_date) : undefined,
         remark: dto.remark,
       },
     });
