@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, StockEvent } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -52,7 +52,23 @@ export class ProductsService {
       inventory: { create: { quantity: stock } },
     };
 
-    return this.prisma.product.create({ data, include: { inventory: true } });
+    return this.prisma.$transaction(async (tx) => {
+      const product = await tx.product.create({ data, include: { inventory: true } });
+
+      if (stock !== 0) {
+        await tx.stockHistory.create({
+          data: {
+            product_id: product.id,
+            event: StockEvent.restock,
+            change_quantity: stock,
+            inventory_after: product.inventory?.quantity ?? 0,
+            source: 'product:create',
+          },
+        });
+      }
+
+      return product;
+    });
   }
 
   async update(id: number, dto: UpdateProductDto) {
@@ -74,13 +90,33 @@ export class ProductsService {
       is_active: dto.is_active,
     };
 
+    let stockChange: number | null = null;
+
     // If stock info was provided, update inventory
     if (dto.stockQuantity != null) {
       const stock = this.resolveStock(dto.stockQuantity, dto.stockUnit, pcsPerBox);
+      const current = existing.inventory?.quantity ?? 0;
+      stockChange = stock - current;
       data.inventory = { update: { data: { quantity: stock } } };
     }
 
-    return this.prisma.product.update({ where: { id }, data, include: { inventory: true } });
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.product.update({ where: { id }, data, include: { inventory: true } });
+
+      if (stockChange !== null && stockChange !== 0) {
+        await tx.stockHistory.create({
+          data: {
+            product_id: id,
+            event: dto.stockEvent ?? (stockChange > 0 ? StockEvent.restock : StockEvent.adjustment),
+            change_quantity: stockChange,
+            inventory_after: updated.inventory?.quantity ?? 0,
+            source: dto.stockSource ?? 'product:update',
+          },
+        });
+      }
+
+      return updated;
+    });
   }
 
   async remove(id: number) {

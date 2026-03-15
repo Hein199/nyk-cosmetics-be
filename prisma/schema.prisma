@@ -51,6 +51,13 @@ enum LedgerCategory {
   OTHER_INCOME
 }
 
+enum StockEvent {
+  order
+  restock
+  adjustment
+  return
+}
+
 model User {
   id            Int           @id @default(autoincrement())
   username      String        @unique
@@ -118,8 +125,9 @@ model Product {
   photo_url     String
   is_active     Boolean         @default(true)
 
-  inventory  Inventory?
-  orderItems OrderItem[]
+  inventory     Inventory?
+  orderItems    OrderItem[]
+  stockHistory  StockHistory[]
   purchaseItems PurchaseItem[]
 
   @@index([category])
@@ -131,6 +139,21 @@ model Inventory {
   quantity   Int
 
   product Product @relation(fields: [product_id], references: [id])
+}
+
+model StockHistory {
+  id              Int         @id @default(autoincrement())
+  product_id      Int
+  event           StockEvent
+  change_quantity Int
+  inventory_after Int
+  source          String?
+  created_at      DateTime    @default(now())
+
+  product Product @relation(fields: [product_id], references: [id])
+
+  @@index([product_id])
+  @@index([created_at])
 }
 
 model Order {
@@ -270,11 +293,11 @@ model Expense {
   description    String
   amount         Decimal     @db.Decimal(12, 2)
   payment_method PaymentType
-  supplier_id    Int?
   expense_date   DateTime    @default(now()) @db.Date
   created_at     DateTime    @default(now())
 
-  supplier       Supplier?      @relation(fields: [supplier_id], references: [id], onDelete: SetNull)
+  supplier_id Int?
+  supplier    Supplier? @relation(fields: [supplier_id], references: [id], onDelete: SetNull)
   purchase_items PurchaseItem[]
 
   @@index([supplier_id])

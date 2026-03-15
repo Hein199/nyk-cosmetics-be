@@ -1,4 +1,4 @@
-import { Body, Controller, Patch, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -18,5 +18,11 @@ export class InventoryController {
   @Roles(Role.ADMIN)
   update(@Param('productId', ParseIntPipe) productId: number, @Body() dto: UpdateInventoryDto) {
     return this.inventoryService.update(productId, dto);
+  }
+
+  @Get('stock-history')
+  @Roles(Role.ADMIN)
+  listHistory() {
+    return this.inventoryService.getHistory();
   }
 }

@@ -1,5 +1,5 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { LoanStatus, OrderStatus, PaymentStatus, Prisma, Role } from '@prisma/client';
+import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import { LoanStatus, OrderStatus, PaymentStatus, Prisma, Role, StockEvent } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderItemsDto } from './dto/update-order-items.dto';
@@ -195,12 +195,23 @@ export class OrdersService {
 
       // Batch update inventory using actual piece deductions (once per product)
       await Promise.all(
-        Array.from(deductionMap.entries()).map(([productId, deduction]) =>
-          tx.inventory.update({
+        Array.from(deductionMap.entries()).map(async ([productId, deduction]) => {
+          const updatedInventory = await tx.inventory.update({
             where: { product_id: productId },
             data: { quantity: { decrement: deduction } },
-          })
-        )
+            select: { quantity: true },
+          });
+
+          await tx.stockHistory.create({
+            data: {
+              product_id: productId,
+              event: StockEvent.order,
+              change_quantity: -deduction,
+              inventory_after: updatedInventory.quantity,
+              source: `order:${orderId}`,
+            },
+          });
+        })
       );
 
       const updated = await tx.order.update({
@@ -212,16 +223,17 @@ export class OrdersService {
     });
   }
 
-  async updateOrderItems(orderId: number, dto: UpdateOrderItemsDto) {
-    const order = await this.prisma.order.findUnique({
-      where: { id: orderId },
+  async updateOrderItems(user: { id: number; role: Role }, orderId: number, dto: UpdateOrderItemsDto) {
+    const order = await this.prisma.order.findFirst({
+      where: user.role === Role.ADMIN ? { id: orderId } : { id: orderId, salesperson_user_id: user.id },
       include: { items: true },
     });
     if (!order) {
       throw new NotFoundException('Order not found');
     }
-    if (order.status !== OrderStatus.PENDING_ADMIN) {
-      throw new BadRequestException('Only pending orders can be edited');
+
+    if (user.role === Role.SALESPERSON && order.status !== OrderStatus.PENDING_ADMIN) {
+      throw new ForbiddenException('Salespersons can only edit pending orders');
     }
 
     const existingItemIds = new Set(order.items.map((i) => i.id));

@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
-import { LedgerCategory, LedgerType, PaymentType, Prisma } from '@prisma/client';
+import { LedgerCategory, LedgerType, PaymentType, Prisma, StockEvent } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreatePurchaseDto } from './dto/create-purchase.dto';
 
@@ -94,9 +94,9 @@ export class PurchasesService {
                 };
             });
 
-            await Promise.all(
-                lines.map((line) =>
-                    tx.inventory.upsert({
+            const inventoryUpdates = await Promise.all(
+                lines.map(async (line) => {
+                    const updatedInventory = await tx.inventory.upsert({
                         where: { product_id: line.productId },
                         create: {
                             product_id: line.productId,
@@ -105,9 +105,29 @@ export class PurchasesService {
                         update: {
                             quantity: { increment: line.quantityInPcs },
                         },
-                    }),
-                ),
+                        select: {
+                            product_id: true,
+                            quantity: true,
+                        },
+                    });
+
+                    return {
+                        productId: updatedInventory.product_id,
+                        changeQuantity: line.quantityInPcs,
+                        inventoryAfter: updatedInventory.quantity,
+                    };
+                }),
             );
+
+            await tx.stockHistory.createMany({
+                data: inventoryUpdates.map((update) => ({
+                    product_id: update.productId,
+                    event: StockEvent.restock,
+                    change_quantity: update.changeQuantity,
+                    inventory_after: update.inventoryAfter,
+                    source: 'Admin Purchase',
+                })),
+            });
 
             const totalAmount = lines.reduce(
                 (sum, line) => sum.plus(line.lineTotal),

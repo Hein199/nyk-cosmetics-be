@@ -1,4 +1,5 @@
-import { IsBoolean, IsIn, IsNumberString, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsEnum, IsIn, IsNumberString, IsOptional, IsString } from 'class-validator';
+import { StockEvent } from '@prisma/client';
 
 export class UpdateProductDto {
   @IsOptional()
@@ -24,6 +25,14 @@ export class UpdateProductDto {
   @IsOptional()
   @IsIn(['PCS', 'BOX'])
   stockUnit?: string;
+
+  @IsOptional()
+  @IsEnum(StockEvent)
+  stockEvent?: StockEvent;
+
+  @IsOptional()
+  @IsString()
+  stockSource?: string;
 
   @IsOptional()
   @IsNumberString()

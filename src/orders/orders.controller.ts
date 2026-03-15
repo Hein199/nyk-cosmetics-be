@@ -46,9 +46,9 @@ export class OrdersController {
   }
 
   @Patch(':id/items')
-  @Roles(Role.ADMIN)
-  updateItems(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateOrderItemsDto) {
-    return this.ordersService.updateOrderItems(id, dto);
+  @Roles(Role.ADMIN, Role.SALESPERSON)
+  updateItems(@Req() req: any, @Param('id', ParseIntPipe) id: number, @Body() dto: UpdateOrderItemsDto) {
+    return this.ordersService.updateOrderItems(req.user, id, dto);
   }
 
   @Post(':id/cancel')

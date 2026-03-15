@@ -14,8 +14,6 @@ ALTER TABLE "Expense" ADD COLUMN     "supplier_id" INTEGER;
 
 -- CreateIndex
 CREATE INDEX "Supplier_phone_number_idx" ON "Supplier"("phone_number");
-
--- CreateIndex
 CREATE INDEX "Expense_supplier_id_idx" ON "Expense"("supplier_id");
 
 -- AddForeignKey
