@@ -102,6 +102,18 @@ model Customer {
   @@index([phone_number])
 }
 
+model Supplier {
+  id           Int      @id @default(autoincrement())
+  name         String
+  phone_number String
+  address      String
+  created_at   DateTime @default(now())
+
+  expenses Expense[]
+
+  @@index([phone_number])
+}
+
 model Product {
   id            Int             @id @default(autoincrement())
   name          String
@@ -273,18 +285,6 @@ model Category {
   created_at DateTime @default(now())
 }
 
-model Supplier {
-  id           Int      @id @default(autoincrement())
-  name         String
-  phone_number String
-  address      String
-  created_at   DateTime @default(now())
-
-  expenses Expense[]
-
-  @@index([phone_number])
-}
-
 model Expense {
   id             Int         @id @default(autoincrement())
   expenseCode    String      @unique @db.VarChar(20)
@@ -296,7 +296,7 @@ model Expense {
   created_at     DateTime    @default(now())
 
   supplier_id Int?
-  supplier    Supplier? @relation(fields: [supplier_id], references: [id])
+  supplier    Supplier? @relation(fields: [supplier_id], references: [id], onDelete: SetNull)
 
   @@index([supplier_id])
 }
