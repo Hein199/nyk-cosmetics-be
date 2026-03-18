@@ -9,6 +9,20 @@ import { UpdateUserDto } from './dto/update-user.dto';
 export class UsersService {
   constructor(private readonly prisma: PrismaService) { }
 
+  private parseNonNegativeMonthlyTarget(rawValue: string | undefined): Prisma.Decimal {
+    const normalizedValue = String(rawValue ?? '').trim();
+    if (!/^(0|[1-9]\d*)$/.test(normalizedValue)) {
+      throw new BadRequestException('Invalid monthly target: must be greater than or equal to 0');
+    }
+
+    const monthlyTarget = new Prisma.Decimal(normalizedValue);
+    if (monthlyTarget.lt(0)) {
+      throw new BadRequestException('Invalid monthly target: must be greater than or equal to 0');
+    }
+
+    return monthlyTarget;
+  }
+
   findAll() {
     return this.prisma.user.findMany({
       select: {
@@ -51,7 +65,9 @@ export class UsersService {
     }
 
     const passwordHash = await bcrypt.hash(dto.password, 10);
-    const monthlyTarget = dto.monthly_target ? new Prisma.Decimal(dto.monthly_target) : new Prisma.Decimal('0');
+    const monthlyTarget = dto.monthly_target
+      ? this.parseNonNegativeMonthlyTarget(dto.monthly_target)
+      : new Prisma.Decimal('0');
 
     return this.prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
@@ -125,7 +141,7 @@ export class UsersService {
       const shouldUpdateName = Boolean(dto.salesperson_name) || Boolean(dto.username);
       const nextName = dto.salesperson_name ?? updated.username;
       const nextMonthlyTarget = dto.monthly_target
-        ? new Prisma.Decimal(dto.monthly_target)
+        ? this.parseNonNegativeMonthlyTarget(dto.monthly_target)
         : existingSalesperson?.monthly_target ?? new Prisma.Decimal('0');
 
       if (existingSalesperson) {

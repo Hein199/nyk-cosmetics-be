@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { LedgerCategory, LedgerType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateExpenseDto } from './dto/create-expense.dto';
@@ -28,13 +28,22 @@ export class ExpensesService {
       const nextNumber = lastNumber + 1;
       const expenseCode = `EXP-${String(nextNumber).padStart(4, '0')}`;
       const expenseDate = dto.expense_date ? parseLocalDate(dto.expense_date) : new Date();
+      const rawAmount = String(dto.amount ?? '').trim();
+      if (!/^[1-9]\d*$/.test(rawAmount)) {
+        throw new BadRequestException('Invalid amount: must be greater than 0');
+      }
+
+      const amount = new Prisma.Decimal(rawAmount);
+      if (amount.lte(0)) {
+        throw new BadRequestException('Invalid amount: must be greater than 0');
+      }
 
       const expense = await tx.expense.create({
         data: {
           expenseCode,
           category: dto.category,
           description: dto.description,
-          amount: new Prisma.Decimal(dto.amount),
+          amount,
           payment_method: dto.payment_method,
           expense_date: expenseDate,
         },

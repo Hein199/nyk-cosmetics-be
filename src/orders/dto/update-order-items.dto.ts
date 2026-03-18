@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { ArrayMinSize, IsInt, IsNumberString, IsOptional, IsPositive, Min, ValidateNested } from 'class-validator';
+import { ArrayMinSize, IsIn, IsInt, IsNumberString, IsOptional, IsPositive, Min, ValidateNested } from 'class-validator';
 
 export class UpdateOrderItemEntryDto {
     @IsInt()
@@ -14,6 +14,10 @@ export class UpdateOrderItemEntryDto {
     @IsOptional()
     @IsNumberString()
     unit_price?: string;
+
+    @IsOptional()
+    @IsIn(['Pcs', 'D', 'P'])
+    unit_type?: string;
 }
 
 export class UpdateOrderItemsDto {

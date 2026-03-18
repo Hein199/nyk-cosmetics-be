@@ -43,6 +43,7 @@ export class DashboardService {
             pendingOrders,
             lowStockProducts,
             recentOrders,
+            recentPurchases,
         ] = await Promise.all([
             this.prisma.order.aggregate({
                 where: { status: { in: [OrderStatus.CONFIRMED, OrderStatus.DELIVERED] } },
@@ -74,6 +75,17 @@ export class DashboardService {
                 orderBy: { created_at: 'desc' },
                 take: 5,
             }),
+            this.prisma.expense.findMany({
+                where: {
+                    category: 'Purchase',
+                },
+                include: {
+                    supplier: { select: { id: true, name: true } },
+                    purchase_items: true,
+                },
+                orderBy: { created_at: 'desc' },
+                take: 5,
+            }),
         ]);
 
         return {
@@ -94,6 +106,14 @@ export class DashboardService {
                 status: o.status.toLowerCase(),
                 date: o.created_at,
                 itemCount: o.items.length,
+            })),
+            recentPurchases: recentPurchases.map((p) => ({
+                id: p.id,
+                expenseCode: p.expenseCode,
+                supplier: p.supplier?.name ?? '-',
+                amount: p.amount,
+                date: p.expense_date,
+                itemCount: p.purchase_items.length,
             })),
         };
     }

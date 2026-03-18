@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Patch, Param, ParseIntPipe, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Patch, Param, ParseIntPipe, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -22,7 +22,7 @@ export class InventoryController {
 
   @Get('stock-history')
   @Roles(Role.ADMIN)
-  listHistory() {
-    return this.inventoryService.getHistory();
+  listHistory(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.inventoryService.getHistory(from, to);
   }
 }
