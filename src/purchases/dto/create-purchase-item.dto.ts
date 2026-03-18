@@ -15,5 +15,5 @@ export class CreatePurchaseItemDto {
     unit_type?: string;
 
     @IsNumberString()
-    unit_price: string;
+    purchase_price_per_pcs: string;
 }

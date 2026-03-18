@@ -18,6 +18,10 @@ export class CreateProductDto {
 
   @IsOptional()
   @IsNumberString()
+  last_purchase_price?: string | null;
+
+  @IsOptional()
+  @IsNumberString()
   stockQuantity?: string;
 
   @IsOptional()

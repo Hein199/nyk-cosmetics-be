@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { LedgerCategory, LedgerType, PaymentType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSalaryDto } from './dto/create-salary.dto';
@@ -8,12 +8,67 @@ function parseLocalDate(value: string): Date {
   return new Date(year, month - 1, day);
 }
 
+function startOfTodayLocal(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
 @Injectable()
 export class SalariesService {
   constructor(private readonly prisma: PrismaService) {}
 
-  findAll() {
+  private parsePositiveAmount(rawAmount: string | undefined): Prisma.Decimal {
+    const normalizedAmount = String(rawAmount ?? '').trim();
+    if (!/^[1-9]\d*$/.test(normalizedAmount)) {
+      throw new BadRequestException('Invalid amount: must be greater than 0');
+    }
+
+    const amount = new Prisma.Decimal(normalizedAmount);
+    if (amount.lte(0)) {
+      throw new BadRequestException('Invalid amount: must be greater than 0');
+    }
+
+    return amount;
+  }
+
+  findAll(from?: string, to?: string) {
+    const today = startOfTodayLocal();
+    let fromDate: Date | null = null;
+    let toDate: Date | null = null;
+
+    if (from) {
+      fromDate = parseLocalDate(from);
+      if (Number.isNaN(fromDate.getTime()) || fromDate.getTime() > today.getTime()) {
+        throw new BadRequestException('Invalid date range');
+      }
+    }
+
+    if (to) {
+      toDate = parseLocalDate(to);
+      if (Number.isNaN(toDate.getTime()) || toDate.getTime() > today.getTime()) {
+        throw new BadRequestException('Invalid date range');
+      }
+    }
+
+    if (fromDate && toDate && fromDate.getTime() > toDate.getTime()) {
+      throw new BadRequestException('Invalid date range');
+    }
+
+    const where: Prisma.SalaryRecordWhereInput = {};
+    if (fromDate || toDate) {
+      where.payment_date = {};
+      if (fromDate) {
+        (where.payment_date as Prisma.DateTimeFilter).gte = fromDate;
+      }
+      if (toDate) {
+        const endOfDay = new Date(toDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        (where.payment_date as Prisma.DateTimeFilter).lte = endOfDay;
+      }
+    }
+
     return this.prisma.salaryRecord.findMany({
+      where,
       include: { employee: true },
       orderBy: { created_at: 'desc' },
     });
@@ -25,16 +80,20 @@ export class SalariesService {
       throw new NotFoundException('Employee not found');
     }
 
-    const basicSalary = new Prisma.Decimal(dto.basic_salary);
+    const basicSalary = this.parsePositiveAmount(dto.basic_salary);
 
     // Sum all bonus amounts
     const totalBonusAmount = (dto.bonuses ?? []).reduce(
-      (sum, b) => sum.plus(new Prisma.Decimal(b.amount)),
+      (sum, b) => sum.plus(this.parsePositiveAmount(b.amount)),
       new Prisma.Decimal(0),
     );
 
     const netSalary = basicSalary.plus(totalBonusAmount);
     const paymentDate = parseLocalDate(dto.payment_date);
+    const today = startOfTodayLocal();
+    if (Number.isNaN(paymentDate.getTime()) || paymentDate.getTime() > today.getTime()) {
+      throw new BadRequestException('Payment date cannot be in the future.');
+    }
 
     return this.prisma.$transaction(async (tx) => {
       // 1. Create salary record

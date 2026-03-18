@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Role } from '@prisma/client';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -22,7 +22,7 @@ export class SalariesController {
 
   @Get()
   @Roles(Role.ADMIN)
-  findAll() {
-    return this.salariesService.findAll();
+  findAll(@Query('from') from?: string, @Query('to') to?: string) {
+    return this.salariesService.findAll(from, to);
   }
 }

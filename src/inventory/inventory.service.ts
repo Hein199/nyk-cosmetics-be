@@ -1,7 +1,17 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { UpdateInventoryDto } from './dto/update-inventory.dto';
-import { StockEvent } from '@prisma/client';
+import { Prisma, StockEvent } from '@prisma/client';
+
+function parseLocalDate(dateStr: string): Date {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  return new Date(year, month - 1, day);
+}
+
+function startOfTodayLocal(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
 
 @Injectable()
 export class InventoryService {
@@ -37,8 +47,44 @@ export class InventoryService {
     });
   }
 
-  async getHistory() {
+  async getHistory(from?: string, to?: string) {
+    const today = startOfTodayLocal();
+    let fromDate: Date | null = null;
+    let toDate: Date | null = null;
+
+    if (from) {
+      fromDate = parseLocalDate(from);
+      if (Number.isNaN(fromDate.getTime()) || fromDate.getTime() > today.getTime()) {
+        throw new BadRequestException('Invalid date range');
+      }
+    }
+
+    if (to) {
+      toDate = parseLocalDate(to);
+      if (Number.isNaN(toDate.getTime()) || toDate.getTime() > today.getTime()) {
+        throw new BadRequestException('Invalid date range');
+      }
+    }
+
+    if (fromDate && toDate && fromDate.getTime() > toDate.getTime()) {
+      throw new BadRequestException('Invalid date range');
+    }
+
+    const where: Prisma.StockHistoryWhereInput = {};
+    if (fromDate || toDate) {
+      where.created_at = {};
+      if (fromDate) {
+        (where.created_at as Prisma.DateTimeFilter).gte = fromDate;
+      }
+      if (toDate) {
+        const endOfDay = new Date(toDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        (where.created_at as Prisma.DateTimeFilter).lte = endOfDay;
+      }
+    }
+
     return this.prisma.stockHistory.findMany({
+      where,
       orderBy: { created_at: 'desc' },
       include: { product: { select: { id: true, name: true, photo_url: true } } },
     });

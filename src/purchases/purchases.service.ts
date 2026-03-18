@@ -13,9 +13,10 @@ type PurchaseLine = {
     productName: string;
     quantity: number;
     quantityInPcs: number;
+    multiplier: number;
     unitType: 'Pcs' | 'D' | 'P';
-    unitPrice: Prisma.Decimal;
-    lineTotal: Prisma.Decimal;
+    purchasePricePerPcs: Prisma.Decimal;
+    totalPrice: Prisma.Decimal;
 };
 
 @Injectable()
@@ -53,8 +54,6 @@ export class PurchasesService {
                 select: {
                     id: true,
                     name: true,
-                    pcs_per_dozen: true,
-                    pcs_per_box: true,
                 },
             });
 
@@ -73,11 +72,11 @@ export class PurchasesService {
             const lines: PurchaseLine[] = dto.items.map((item) => {
                 const product = productMap.get(item.product_id);
                 const unitType = (item.unit_type ?? 'Pcs') as 'Pcs' | 'D' | 'P';
-                const multiplier = unitType === 'D'
-                    ? Number(product?.pcs_per_dozen ?? 12)
-                    : unitType === 'P'
-                        ? Number(product?.pcs_per_box ?? 24)
-                        : 1;
+                const multiplier = unitType === 'D' ? 12 : unitType === 'P' ? 24 : 1;
+
+                if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
+                    throw new BadRequestException('Invalid purchase data: price and quantity must be greater than 0');
+                }
 
                 if (!Number.isFinite(multiplier) || multiplier <= 0) {
                     throw new BadRequestException(`Invalid unit conversion for product ${item.product_id}`);
@@ -88,14 +87,30 @@ export class PurchasesService {
                     throw new BadRequestException(`Invalid quantity for product ${item.product_id}`);
                 }
 
+                const rawPurchasePricePerPcs = String(item.purchase_price_per_pcs ?? '').trim();
+                if (!/^[1-9]\d*$/.test(rawPurchasePricePerPcs)) {
+                    throw new BadRequestException('Invalid amount: must be greater than 0');
+                }
+
+                const purchasePricePerPcs = new Prisma.Decimal(rawPurchasePricePerPcs);
+                if (purchasePricePerPcs.lte(0)) {
+                    throw new BadRequestException('Invalid amount: must be greater than 0');
+                }
+
+                const totalPrice = purchasePricePerPcs.mul(quantityInPcs);
+                if (totalPrice.lt(0)) {
+                    throw new BadRequestException('Invalid purchase data: price and quantity must be greater than 0');
+                }
+
                 return {
                     productId: item.product_id,
                     productName: product?.name ?? `Product #${item.product_id}`,
                     quantity: item.quantity,
                     quantityInPcs,
+                    multiplier,
                     unitType,
-                    unitPrice: new Prisma.Decimal(item.unit_price),
-                    lineTotal: new Prisma.Decimal(item.unit_price).mul(item.quantity),
+                    purchasePricePerPcs,
+                    totalPrice,
                 };
             });
 
@@ -134,10 +149,26 @@ export class PurchasesService {
                 })),
             });
 
+            await Promise.all(
+                lines.map((line) => {
+                    const productUpdateData = {
+                        last_purchase_price: line.purchasePricePerPcs,
+                    } as Prisma.ProductUpdateInput;
+
+                    return tx.product.update({
+                        where: { id: line.productId },
+                        data: productUpdateData,
+                    });
+                }),
+            );
+
             const totalAmount = lines.reduce(
-                (sum, line) => sum.plus(line.lineTotal),
+                (sum, line) => sum.plus(line.totalPrice),
                 new Prisma.Decimal(0),
             );
+            if (totalAmount.lte(0)) {
+                throw new BadRequestException('Invalid amount: must be greater than 0');
+            }
 
             const latestExpense = await tx.expense.findFirst({
                 orderBy: { expenseCode: 'desc' },
@@ -156,7 +187,7 @@ export class PurchasesService {
                 })
                 .join(', ');
             const summaryTail = lines.length > 3 ? ` +${lines.length - 3} more` : '';
-            const defaultDescription = `Stock purchase: ${summaryHead}${summaryTail}`;
+            const defaultDescription = `purchase: ${summaryHead}${summaryTail}`;
             const note = dto.description?.trim();
             const description = note
                 ? `Purchase from ${supplier.name}: ${note}`
@@ -182,6 +213,7 @@ export class PurchasesService {
                             product_id: number;
                             quantity: number;
                             unit_type: string;
+                            multiplier: number;
                             quantity_pcs: number;
                             unit_price: Prisma.Decimal;
                             line_total: Prisma.Decimal;
@@ -198,9 +230,10 @@ export class PurchasesService {
                             product_id: line.productId,
                             quantity: line.quantity,
                             unit_type: line.unitType,
+                            multiplier: line.multiplier,
                             quantity_pcs: line.quantityInPcs,
-                            unit_price: line.unitPrice,
-                            line_total: line.lineTotal,
+                            unit_price: line.purchasePricePerPcs,
+                            line_total: line.totalPrice,
                         },
                     }),
                 ),
@@ -236,10 +269,13 @@ export class PurchasesService {
                     product_name: line.productName,
                     quantity: line.quantity,
                     unit_type: line.unitType,
+                    multiplier: line.multiplier,
                     quantity_added: line.quantityInPcs,
                     quantity_added_pcs: line.quantityInPcs,
-                    unit_price: line.unitPrice.toString(),
-                    line_total: line.lineTotal.toString(),
+                    purchase_price_per_pcs: line.purchasePricePerPcs.toString(),
+                    total_price: line.totalPrice.toString(),
+                    unit_price: line.purchasePricePerPcs.toString(),
+                    line_total: line.totalPrice.toString(),
                     quantity_after: inventoryMap.get(line.productId) ?? 0,
                 })),
             };

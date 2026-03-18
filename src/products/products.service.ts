@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma, StockEvent } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -7,6 +7,38 @@ import { UpdateProductDto } from './dto/update-product.dto';
 @Injectable()
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) { }
+
+  private parsePositiveAmount(value: string | null | undefined, fieldName: string): Prisma.Decimal {
+    const normalized = String(value ?? '').trim();
+    if (!/^[1-9]\d*$/.test(normalized)) {
+      throw new BadRequestException(`${fieldName} must be greater than 0`);
+    }
+
+    const amount = new Prisma.Decimal(normalized);
+    if (amount.lte(0)) {
+      throw new BadRequestException(`${fieldName} must be greater than 0`);
+    }
+
+    return amount;
+  }
+
+  private parseNonNegativeAmount(value: string | null | undefined, fieldName: string): Prisma.Decimal | null {
+    if (value == null || value === '') {
+      return null;
+    }
+
+    const normalized = String(value).trim();
+    if (!/^(0|[1-9]\d*)$/.test(normalized)) {
+      throw new BadRequestException(`${fieldName} must be greater than or equal to 0`);
+    }
+
+    const amount = new Prisma.Decimal(normalized);
+    if (amount.lt(0)) {
+      throw new BadRequestException(`${fieldName} must be greater than or equal to 0`);
+    }
+
+    return amount;
+  }
 
   findAll() {
     return this.prisma.product.findMany({
@@ -39,12 +71,15 @@ export class ProductsService {
 
   async create(dto: CreateProductDto) {
     const stock = this.resolveStock(dto.stockQuantity, dto.stockUnit, dto.pcs_per_box);
+    const unitPrice = this.parsePositiveAmount(dto.unit_price, 'Selling price');
+    const lastPurchasePrice = this.parseNonNegativeAmount(dto.last_purchase_price, 'Last purchase price');
 
     const data: Prisma.ProductCreateInput = {
       name: dto.name,
       description: dto.description ?? null,
       category: dto.category,
-      unit_price: new Prisma.Decimal(dto.unit_price),
+      unit_price: unitPrice,
+      last_purchase_price: lastPurchasePrice,
       pcs_per_dozen: dto.pcs_per_dozen ? new Prisma.Decimal(dto.pcs_per_dozen) : new Prisma.Decimal('12'),
       pcs_per_box: dto.pcs_per_box ? new Prisma.Decimal(dto.pcs_per_box) : new Prisma.Decimal('24'),
       photo_url: dto.photo_url,
@@ -83,7 +118,12 @@ export class ProductsService {
       name: dto.name,
       description: dto.description,
       category: dto.category,
-      unit_price: dto.unit_price ? new Prisma.Decimal(dto.unit_price) : undefined,
+      unit_price: dto.unit_price === undefined
+        ? undefined
+        : this.parsePositiveAmount(dto.unit_price, 'Selling price'),
+      last_purchase_price: dto.last_purchase_price === undefined
+        ? undefined
+        : this.parseNonNegativeAmount(dto.last_purchase_price, 'Last purchase price'),
       pcs_per_dozen: dto.pcs_per_dozen ? new Prisma.Decimal(dto.pcs_per_dozen) : undefined,
       pcs_per_box: dto.pcs_per_box ? new Prisma.Decimal(dto.pcs_per_box) : undefined,
       photo_url: dto.photo_url,

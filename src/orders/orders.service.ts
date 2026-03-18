@@ -251,6 +251,9 @@ export class OrdersService {
         if (entry.unit_price !== undefined) {
           data.unit_price = new Prisma.Decimal(entry.unit_price);
         }
+        if (entry.unit_type !== undefined) {
+          data.unit_type = entry.unit_type;
+        }
         await tx.orderItem.update({ where: { id: entry.id }, data });
       }
 

@@ -46,7 +46,15 @@ export class PaymentsService {
     const isAdmin = user.role === Role.ADMIN;
 
     return this.prisma.$transaction(async (tx) => {
-      const paymentAmount = new Prisma.Decimal(dto.amount_paid);
+      const rawAmount = String(dto.amount_paid ?? '').trim();
+      if (!/^\d+(\.\d+)?$/.test(rawAmount)) {
+        throw new BadRequestException('Invalid amount: must be greater than 0');
+      }
+
+      const paymentAmount = new Prisma.Decimal(rawAmount);
+      if (paymentAmount.lte(0)) {
+        throw new BadRequestException('Invalid amount: must be greater than 0');
+      }
 
       if (dto.order_id) {
         const order = await tx.order.findUnique({ where: { id: dto.order_id } });

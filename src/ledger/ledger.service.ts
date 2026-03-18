@@ -8,19 +8,73 @@ function parseLocalDate(dateStr: string): Date {
   return new Date(year, month - 1, day);
 }
 
+function startOfTodayLocal(): Date {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+}
+
+function parseAndValidateEntryDate(entryDate: string): Date {
+  const parsedDate = parseLocalDate(entryDate);
+  if (Number.isNaN(parsedDate.getTime())) {
+    throw new BadRequestException('Invalid entry date');
+  }
+
+  if (parsedDate.getTime() > startOfTodayLocal().getTime()) {
+    throw new BadRequestException('Date cannot be in the future');
+  }
+
+  return parsedDate;
+}
+
+function parseAndValidateAmount(rawAmount: string): Prisma.Decimal {
+  const normalizedAmount = String(rawAmount ?? '').trim();
+  if (!/^[1-9]\d*$/.test(normalizedAmount)) {
+    throw new BadRequestException('Invalid amount: must be greater than 0');
+  }
+
+  const amount = new Prisma.Decimal(normalizedAmount);
+  if (amount.lte(0)) {
+    throw new BadRequestException('Invalid amount: must be greater than 0');
+  }
+
+  return amount;
+}
+
 @Injectable()
 export class LedgerService {
   constructor(private readonly prisma: PrismaService) { }
 
   async findAll(from?: string, to?: string) {
-    const where: Prisma.LedgerEntryWhereInput = {};
-    if (from || to) {
-      where.entry_date = {};
-      if (from) {
-        (where.entry_date as Prisma.DateTimeFilter).gte = parseLocalDate(from);
+    const today = startOfTodayLocal();
+    let fromDate: Date | null = null;
+    let toDate: Date | null = null;
+
+    if (from) {
+      fromDate = parseLocalDate(from);
+      if (Number.isNaN(fromDate.getTime()) || fromDate.getTime() > today.getTime()) {
+        throw new BadRequestException('Invalid date range');
       }
-      if (to) {
-        const endOfDay = parseLocalDate(to);
+    }
+
+    if (to) {
+      toDate = parseLocalDate(to);
+      if (Number.isNaN(toDate.getTime()) || toDate.getTime() > today.getTime()) {
+        throw new BadRequestException('Invalid date range');
+      }
+    }
+
+    if (fromDate && toDate && fromDate.getTime() > toDate.getTime()) {
+      throw new BadRequestException('Invalid date range');
+    }
+
+    const where: Prisma.LedgerEntryWhereInput = {};
+    if (fromDate || toDate) {
+      where.entry_date = {};
+      if (fromDate) {
+        (where.entry_date as Prisma.DateTimeFilter).gte = fromDate;
+      }
+      if (toDate) {
+        const endOfDay = new Date(toDate);
         endOfDay.setHours(23, 59, 59, 999);
         (where.entry_date as Prisma.DateTimeFilter).lte = endOfDay;
       }
@@ -137,16 +191,14 @@ export class LedgerService {
   }
 
   async create(dto: CreateLedgerEntryDto) {
-    const amount = new Prisma.Decimal(dto.amount);
-    if (amount.lte(0)) {
-      throw new BadRequestException('Amount must be greater than zero');
-    }
+    const amount = parseAndValidateAmount(dto.amount);
+    const entryDate = parseAndValidateEntryDate(dto.entry_date);
 
     const type = dto.type === 'INCOME' ? LedgerType.DEBIT : LedgerType.CREDIT;
 
     return this.prisma.ledgerEntry.create({
       data: {
-        entry_date: parseLocalDate(dto.entry_date),
+        entry_date: entryDate,
         type,
         category: LedgerCategory.OTHER_INCOME,
         reference_id: 0,
@@ -163,17 +215,15 @@ export class LedgerService {
       throw new BadRequestException('Cannot edit system-generated entries');
     }
 
-    const amount = new Prisma.Decimal(dto.amount);
-    if (amount.lte(0)) {
-      throw new BadRequestException('Amount must be greater than zero');
-    }
+    const amount = parseAndValidateAmount(dto.amount);
+    const entryDate = parseAndValidateEntryDate(dto.entry_date);
 
     const type = dto.type === 'INCOME' ? LedgerType.DEBIT : LedgerType.CREDIT;
 
     return this.prisma.ledgerEntry.update({
       where: { id },
       data: {
-        entry_date: parseLocalDate(dto.entry_date),
+        entry_date: entryDate,
         type,
         amount,
         description: dto.description,
