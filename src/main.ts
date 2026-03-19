@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { PrismaClientExceptionFilter } from './common/filters/prisma-client-exception.filter';
 import { PrismaService } from './prisma/prisma.service';
 
 async function bootstrap() {
@@ -18,6 +19,7 @@ async function bootstrap() {
   });
 
   app.setGlobalPrefix('_api');
+  app.useGlobalFilters(new PrismaClientExceptionFilter());
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
 
   const config = new DocumentBuilder()

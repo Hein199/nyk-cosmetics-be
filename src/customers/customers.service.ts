@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { LoanStatus, Prisma, Role } from '@prisma/client';
+import { CustomerStatus, LoanStatus, Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
@@ -19,12 +19,12 @@ export class CustomersService {
     const where: Prisma.CustomerWhereInput =
       user.role === Role.SALESPERSON
         ? {
-            orders: {
-              some: {
-                salesperson_user_id: user.id,
-              },
+          orders: {
+            some: {
+              salesperson_user_id: user.id,
             },
-          }
+          },
+        }
         : {};
 
     const customers = await this.prisma.customer.findMany({
@@ -37,7 +37,7 @@ export class CustomersService {
       },
     });
 
-    return customers.map((customer) => {
+    const mappedCustomers = customers.map((customer) => {
       const outstanding_amount = customer.loans
         .filter((loan) => loan.status === LoanStatus.OPEN)
         .reduce((sum, loan) => sum + Number(loan.remaining_amount), 0);
@@ -45,6 +45,19 @@ export class CustomersService {
       const { loans, ...rest } = customer;
       return { ...rest, outstanding_amount };
     });
+
+    if (user.role === Role.SALESPERSON) {
+      return mappedCustomers.filter((customer) => {
+        if (customer.status === CustomerStatus.ACTIVE) {
+          return true;
+        }
+
+        // For archived customers, keep visibility only when debt remains outstanding.
+        return customer.outstanding_amount > 0;
+      });
+    }
+
+    return mappedCustomers;
   }
 
   async findOne(id: number) {
@@ -62,6 +75,18 @@ export class CustomersService {
   async update(id: number, dto: UpdateCustomerDto) {
     await this.findOne(id);
     return this.prisma.customer.update({ where: { id }, data: dto });
+  }
+
+  async remove(id: number) {
+    const customer = await this.findOne(id);
+    if (customer.status === CustomerStatus.INACTIVE) {
+      return customer;
+    }
+
+    return this.prisma.customer.update({
+      where: { id },
+      data: { status: CustomerStatus.INACTIVE },
+    });
   }
 
   async updateNotes(id: number, notes: string) {
