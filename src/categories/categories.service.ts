@@ -48,23 +48,10 @@ export class CategoriesService {
   }
 
   async remove(id: number) {
-    try {
-      const category = await this.prisma.category.findUnique({ where: { id } });
-      if (!category) throw new NotFoundException('Category not found');
+    const category = await this.prisma.category.findUnique({ where: { id } });
+    if (!category) throw new NotFoundException('Category not found');
 
-      await this.prisma.category.delete({ where: { id } });
-      return { success: true };
-    } catch (error) {
-      // Re-throw our own HTTP exceptions untouched
-      if (error?.status) throw error;
-      this.logger.error('remove failed', error);
-      this.logger.error(error?.stack);
-      if (error?.code) this.logger.error(`Prisma code: ${error.code}`);
-      // P2003 = foreign key constraint violation
-      if (error?.code === 'P2003') {
-        throw new BadRequestException('Category is in use by products');
-      }
-      throw new InternalServerErrorException(error?.message ?? 'Failed to delete category');
-    }
+    await this.prisma.category.delete({ where: { id } });
+    return { success: true };
   }
 }

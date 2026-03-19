@@ -1,5 +1,5 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { LoanStatus, OrderStatus, PaymentStatus, Prisma, Role, StockEvent } from '@prisma/client';
+import { CustomerStatus, LoanStatus, OrderStatus, PaymentStatus, Prisma, Role, StockEvent } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { UpdateOrderItemsDto } from './dto/update-order-items.dto';
@@ -118,6 +118,9 @@ export class OrdersService {
     const customer = await this.prisma.customer.findUnique({ where: { id: dto.customer_id } });
     if (!customer) {
       throw new NotFoundException('Customer not found');
+    }
+    if (customer.status !== CustomerStatus.ACTIVE) {
+      throw new BadRequestException('Archived customers cannot be used for new orders');
     }
 
     return this.prisma.$transaction(async (tx) => {

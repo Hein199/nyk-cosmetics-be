@@ -160,16 +160,22 @@ export class ProductsService {
   }
 
   async remove(id: number) {
-    const existing = await this.prisma.product.findUnique({ where: { id }, include: { inventory: true, orderItems: true } });
+    const existing = await this.prisma.product.findUnique({
+      where: { id },
+      select: { id: true, name: true, is_active: true },
+    });
     if (!existing) {
       throw new NotFoundException('Product not found');
     }
 
-    // Delete related inventory first, then product
-    if (existing.inventory) {
-      await this.prisma.inventory.delete({ where: { product_id: id } });
+    if (!existing.is_active) {
+      return existing;
     }
 
-    return this.prisma.product.delete({ where: { id } });
+    return this.prisma.product.update({
+      where: { id },
+      data: { is_active: false },
+      select: { id: true, name: true, is_active: true },
+    });
   }
 }
