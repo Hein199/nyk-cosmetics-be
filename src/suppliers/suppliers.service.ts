@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSupplierDto } from './dto/create-supplier.dto';
@@ -133,7 +133,18 @@ export class SuppliersService {
     }
 
     async remove(id: number) {
-        await this.findOne(id);
+        const supplier = await this.findOne(id);
+
+        const linkedPurchaseCount = await this.prisma.expense.count({
+            where: { supplier_id: id },
+        });
+
+        if (linkedPurchaseCount > 0) {
+            throw new ConflictException(
+                `Cannot delete supplier "${supplier.name}" because it has ${linkedPurchaseCount} linked purchase${linkedPurchaseCount > 1 ? 's' : ''}.`,
+            );
+        }
+
         return this.supplierClient.delete({ where: { id } });
     }
 

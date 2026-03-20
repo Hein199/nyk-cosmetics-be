@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { CustomerStatus, LoanStatus, Prisma, Role } from '@prisma/client';
+import { CustomerStatus, LoanStatus, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCustomerDto } from './dto/create-customer.dto';
 import { UpdateCustomerDto } from './dto/update-customer.dto';
@@ -16,19 +16,7 @@ export class CustomersService {
   constructor(private readonly prisma: PrismaService) { }
 
   async findAll(user: { id: number; role: Role }) {
-    const where: Prisma.CustomerWhereInput =
-      user.role === Role.SALESPERSON
-        ? {
-          orders: {
-            some: {
-              salesperson_user_id: user.id,
-            },
-          },
-        }
-        : {};
-
     const customers = await this.prisma.customer.findMany({
-      where,
       orderBy: { id: 'desc' },
       include: {
         loans: {

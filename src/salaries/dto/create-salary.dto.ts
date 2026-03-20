@@ -28,6 +28,12 @@ export class CreateSalaryDto {
   @Type(() => BonusItemDto)
   bonuses?: BonusItemDto[];
 
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BonusItemDto)
+  deductions?: BonusItemDto[];
+
   @IsDateString()
   payment_date: string;
 

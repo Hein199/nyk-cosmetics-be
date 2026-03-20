@@ -18,6 +18,8 @@ function startOfTodayLocal(): Date {
 export class EmployeesService {
   constructor(private readonly prisma: PrismaService) { }
 
+  private readonly maxAmount = new Prisma.Decimal('9999999999.99');
+
   private parseAndValidateStartDate(rawDate: string): Date {
     const startDate = parseLocalDate(rawDate);
     const today = startOfTodayLocal();
@@ -37,6 +39,9 @@ export class EmployeesService {
     const amount = new Prisma.Decimal(normalizedAmount);
     if (amount.lte(0)) {
       throw new BadRequestException('Invalid amount: must be greater than 0');
+    }
+    if (amount.gt(this.maxAmount)) {
+      throw new BadRequestException(`Invalid amount: must not exceed ${this.maxAmount.toFixed(2)}`);
     }
 
     return amount;

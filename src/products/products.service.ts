@@ -8,15 +8,20 @@ import { UpdateProductDto } from './dto/update-product.dto';
 export class ProductsService {
   constructor(private readonly prisma: PrismaService) { }
 
+  private readonly maxDecimalAmount = new Prisma.Decimal('9999999999.99');
+
   private parsePositiveAmount(value: string | null | undefined, fieldName: string): Prisma.Decimal {
     const normalized = String(value ?? '').trim();
-    if (!/^[1-9]\d*$/.test(normalized)) {
+    if (!/^(0|[1-9]\d*)(\.\d{1,2})?$/.test(normalized)) {
       throw new BadRequestException(`${fieldName} must be greater than 0`);
     }
 
     const amount = new Prisma.Decimal(normalized);
     if (amount.lte(0)) {
       throw new BadRequestException(`${fieldName} must be greater than 0`);
+    }
+    if (amount.gt(this.maxDecimalAmount)) {
+      throw new BadRequestException(`${fieldName} must not exceed ${this.maxDecimalAmount.toFixed(2)}`);
     }
 
     return amount;
@@ -28,13 +33,16 @@ export class ProductsService {
     }
 
     const normalized = String(value).trim();
-    if (!/^(0|[1-9]\d*)$/.test(normalized)) {
+    if (!/^(0|[1-9]\d*)(\.\d{1,2})?$/.test(normalized)) {
       throw new BadRequestException(`${fieldName} must be greater than or equal to 0`);
     }
 
     const amount = new Prisma.Decimal(normalized);
     if (amount.lt(0)) {
       throw new BadRequestException(`${fieldName} must be greater than or equal to 0`);
+    }
+    if (amount.gt(this.maxDecimalAmount)) {
+      throw new BadRequestException(`${fieldName} must not exceed ${this.maxDecimalAmount.toFixed(2)}`);
     }
 
     return amount;
@@ -72,13 +80,25 @@ export class ProductsService {
   async create(dto: CreateProductDto) {
     const stock = this.resolveStock(dto.stockQuantity, dto.stockUnit, dto.pcs_per_box);
     const unitPrice = this.parsePositiveAmount(dto.unit_price, 'Selling price');
+    const customPriceMin = dto.custom_price_min === undefined
+      ? new Prisma.Decimal('1')
+      : this.parsePositiveAmount(dto.custom_price_min, 'Custom price minimum');
+    const customPriceMax = dto.custom_price_max === undefined
+      ? this.maxDecimalAmount
+      : this.parsePositiveAmount(dto.custom_price_max, 'Custom price maximum');
     const lastPurchasePrice = this.parseNonNegativeAmount(dto.last_purchase_price, 'Last purchase price');
+
+    if (customPriceMin.gt(customPriceMax)) {
+      throw new BadRequestException('Custom price minimum must be less than or equal to custom price maximum');
+    }
 
     const data: Prisma.ProductCreateInput = {
       name: dto.name,
       description: dto.description ?? null,
       category: dto.category,
       unit_price: unitPrice,
+      custom_price_min: customPriceMin,
+      custom_price_max: customPriceMax,
       last_purchase_price: lastPurchasePrice,
       pcs_per_dozen: dto.pcs_per_dozen ? new Prisma.Decimal(dto.pcs_per_dozen) : new Prisma.Decimal('12'),
       pcs_per_box: dto.pcs_per_box ? new Prisma.Decimal(dto.pcs_per_box) : new Prisma.Decimal('24'),
@@ -112,6 +132,18 @@ export class ProductsService {
       throw new NotFoundException('Product not found');
     }
 
+    const nextCustomPriceMin = dto.custom_price_min === undefined
+      ? new Prisma.Decimal(existing.custom_price_min.toString())
+      : this.parsePositiveAmount(dto.custom_price_min, 'Custom price minimum');
+
+    const nextCustomPriceMax = dto.custom_price_max === undefined
+      ? new Prisma.Decimal(existing.custom_price_max.toString())
+      : this.parsePositiveAmount(dto.custom_price_max, 'Custom price maximum');
+
+    if (nextCustomPriceMin.gt(nextCustomPriceMax)) {
+      throw new BadRequestException('Custom price minimum must be less than or equal to custom price maximum');
+    }
+
     const pcsPerBox = dto.pcs_per_box ?? String(existing.pcs_per_box);
 
     const data: Prisma.ProductUpdateInput = {
@@ -121,6 +153,12 @@ export class ProductsService {
       unit_price: dto.unit_price === undefined
         ? undefined
         : this.parsePositiveAmount(dto.unit_price, 'Selling price'),
+      custom_price_min: dto.custom_price_min === undefined
+        ? undefined
+        : nextCustomPriceMin,
+      custom_price_max: dto.custom_price_max === undefined
+        ? undefined
+        : nextCustomPriceMax,
       last_purchase_price: dto.last_purchase_price === undefined
         ? undefined
         : this.parseNonNegativeAmount(dto.last_purchase_price, 'Last purchase price'),

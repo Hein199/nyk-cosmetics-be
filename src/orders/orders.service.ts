@@ -8,6 +8,8 @@ import { UpdateOrderItemsDto } from './dto/update-order-items.dto';
 export class OrdersService {
   constructor(private readonly prisma: PrismaService) { }
 
+  private readonly maxAmount = new Prisma.Decimal('9999999999.99');
+
   private normalizeOrderItems(
     items: Array<{
       product_id: number;
@@ -48,6 +50,45 @@ export class OrdersService {
         item.unit_price === candidate.unit_price
       );
     });
+  }
+
+  private parseMoneyAmount(value: Prisma.Decimal | string | number, fieldName: string, allowZero = false) {
+    const normalized = String(value ?? '').trim();
+    if (!/^(0|[1-9]\d*)(\.\d{1,2})?$/.test(normalized)) {
+      throw new BadRequestException(`${fieldName} must be a valid amount with up to 2 decimal places`);
+    }
+
+    const amount = new Prisma.Decimal(normalized);
+    if (allowZero ? amount.lt(0) : amount.lte(0)) {
+      throw new BadRequestException(`${fieldName} must be ${allowZero ? 'greater than or equal to 0' : 'greater than 0'}`);
+    }
+    if (amount.gt(this.maxAmount)) {
+      throw new BadRequestException(`${fieldName} must not exceed ${this.maxAmount.toFixed(2)}`);
+    }
+
+    return amount;
+  }
+
+  private getUnitMultiplier(unitType: string, product: { pcs_per_dozen: Prisma.Decimal | string | number; pcs_per_box: Prisma.Decimal | string | number; }) {
+    if (unitType === 'D') {
+      return new Prisma.Decimal(product.pcs_per_dozen.toString());
+    }
+
+    if (unitType === 'P') {
+      return new Prisma.Decimal(product.pcs_per_box.toString());
+    }
+
+    return new Prisma.Decimal(1);
+  }
+
+  private getUnitTypeLabel(unitType: string) {
+    if (unitType === 'D') {
+      return 'Dozen';
+    }
+    if (unitType === 'P') {
+      return 'Box';
+    }
+    return 'Pcs';
   }
 
   findAll(user: { id: number; role: Role }) {
@@ -127,11 +168,14 @@ export class OrdersService {
       // Serialize create requests per salesperson to prevent rapid double-submit races.
       await tx.$executeRaw`SELECT pg_advisory_xact_lock(${9001}, ${userId})`;
 
-      // Allow same product_id with different unit_type, but reject true duplicates (same product_id + unit_type)
+      // Allow same product_id + unit_type when unit_price differs, but reject exact duplicates.
       const seen = new Set<string>();
       const duplicateKeys: string[] = [];
       for (const item of dto.items) {
-        const key = `${item.product_id}:${item.unit_type ?? 'Pcs'}`;
+        const priceKey = item.unit_price === undefined
+          ? '__default__'
+          : new Prisma.Decimal(item.unit_price).toString();
+        const key = `${item.product_id}:${item.unit_type ?? 'Pcs'}:${priceKey}`;
         if (seen.has(key)) {
           duplicateKeys.push(key);
         }
@@ -140,7 +184,7 @@ export class OrdersService {
 
       if (duplicateKeys.length > 0) {
         throw new BadRequestException({
-          message: 'Duplicate product with same unit type in order items',
+          message: 'Duplicate product with same unit type and unit price in order items',
           duplicateKeys: Array.from(new Set(duplicateKeys)),
         });
       }
@@ -168,14 +212,53 @@ export class OrdersService {
         if (!product) {
           throw new BadRequestException('Invalid product in order items');
         }
-        const unitPrice = item.unit_price
-          ? new Prisma.Decimal(item.unit_price)
-          : new Prisma.Decimal(product.unit_price.toString());
-        total = total.plus(unitPrice.mul(item.quantity));
+
+        const unitType = item.unit_type ?? 'Pcs';
+        const multiplier = this.getUnitMultiplier(unitType, product);
+        const defaultUnitPrice = new Prisma.Decimal(product.unit_price.toString()).mul(multiplier);
+        const unitPrice = item.unit_price !== undefined
+          ? this.parseMoneyAmount(item.unit_price, 'Unit price')
+          : defaultUnitPrice;
+        const quantity = item.quantity;
+        const quantityDecimal = new Prisma.Decimal(quantity);
+
+        if (!Number.isInteger(quantity) || quantity <= 0) {
+          throw new BadRequestException(`Invalid quantity for ${product.name}`);
+        }
+
+        const isCustomPrice = item.unit_price !== undefined && !unitPrice.equals(defaultUnitPrice);
+        if (isCustomPrice) {
+          const customMinPerUnit = new Prisma.Decimal(product.custom_price_min.toString()).mul(multiplier);
+          const customMaxPerUnit = new Prisma.Decimal(product.custom_price_max.toString()).mul(multiplier);
+          if (unitPrice.lt(customMinPerUnit) || unitPrice.gt(customMaxPerUnit)) {
+            throw new BadRequestException(
+              `Custom price for ${product.name} (${this.getUnitTypeLabel(unitType)}) must be between ${customMinPerUnit.toFixed(2)} and ${customMaxPerUnit.toFixed(2)} MMK.`,
+            );
+          }
+        }
+
+        const remainingBudget = this.maxAmount.minus(total);
+        if (remainingBudget.lte(0)) {
+          throw new BadRequestException(`Order total exceeds maximum allowed amount (${this.maxAmount.toFixed(2)} MMK).`);
+        }
+
+        const maxUnitPriceByRemainingTotal = remainingBudget.div(quantityDecimal);
+        if (unitPrice.gt(maxUnitPriceByRemainingTotal)) {
+          throw new BadRequestException(
+            `Price for ${product.name} (${this.getUnitTypeLabel(unitType)}) is too high for quantity ${quantity}. Maximum allowed is ${maxUnitPriceByRemainingTotal.toFixed(2)} MMK.`,
+          );
+        }
+
+        const lineTotal = unitPrice.mul(quantityDecimal);
+        if (lineTotal.gt(remainingBudget)) {
+          throw new BadRequestException(`Line total for ${product.name} exceeds maximum allowed order amount.`);
+        }
+
+        total = total.plus(lineTotal);
         return {
           product_id: item.product_id,
-          quantity: item.quantity,
-          unit_type: item.unit_type ?? 'Pcs',
+          quantity,
+          unit_type: unitType,
           unit_price: unitPrice,
         };
       });
@@ -258,7 +341,7 @@ export class OrdersService {
         if (pendingQty + requestedQty > inventoryQty) {
           const productName = productMap.get(productId)?.name ?? `Product ${productId}`;
           throw new BadRequestException(
-            `${productName} has insufficient stock before confirmation. Available: ${inventoryQty} PCS, Pending: ${pendingQty} PCS, Requested: ${requestedQty} PCS.`,
+            `${productName} has insufficient stock before confirmation.`,
           );
         }
       }
@@ -403,6 +486,9 @@ export class OrdersService {
               select: {
                 id: true,
                 name: true,
+                unit_price: true,
+                custom_price_min: true,
+                custom_price_max: true,
                 pcs_per_dozen: true,
                 pcs_per_box: true,
               },
@@ -428,12 +514,44 @@ export class OrdersService {
 
     return this.prisma.$transaction(async (tx) => {
       const updateMap = new Map(dto.items.map((entry) => [entry.id, entry]));
+      const nextItemState = new Map<number, {
+        quantity: number;
+        unitType: string;
+        unitPrice: Prisma.Decimal;
+        productName: string;
+      }>();
 
       const requiredPcsByProduct = new Map<number, { required: number; productName: string }>();
       for (const item of order.items) {
         const patch = updateMap.get(item.id);
         const quantity = patch?.quantity ?? item.quantity;
         const unitType = patch?.unit_type ?? item.unit_type;
+        const unitPrice = this.parseMoneyAmount(
+          patch?.unit_price ?? item.unit_price.toString(),
+          'Unit price',
+          true,
+        );
+
+        const priceMultiplier = this.getUnitMultiplier(unitType, item.product);
+        const defaultUnitPrice = new Prisma.Decimal(item.product.unit_price.toString()).mul(priceMultiplier);
+        const isCustomPrice = !unitPrice.equals(defaultUnitPrice);
+
+        if (user.role === Role.SALESPERSON && isCustomPrice) {
+          const customMinPerUnit = new Prisma.Decimal(item.product.custom_price_min.toString()).mul(priceMultiplier);
+          const customMaxPerUnit = new Prisma.Decimal(item.product.custom_price_max.toString()).mul(priceMultiplier);
+          if (unitPrice.lt(customMinPerUnit) || unitPrice.gt(customMaxPerUnit)) {
+            throw new BadRequestException(
+              `Custom price for ${item.product.name} (${this.getUnitTypeLabel(unitType)}) must be between ${customMinPerUnit.toFixed(2)} and ${customMaxPerUnit.toFixed(2)} MMK.`,
+            );
+          }
+        }
+
+        nextItemState.set(item.id, {
+          quantity,
+          unitType,
+          unitPrice,
+          productName: item.product.name,
+        });
 
         let multiplier = 1;
         if (unitType === 'D') {
@@ -455,21 +573,106 @@ export class OrdersService {
       }
 
       const productIds = Array.from(requiredPcsByProduct.keys());
-      const inventories = await tx.inventory.findMany({
-        where: { product_id: { in: productIds } },
-      });
-      const inventoryMap = new Map(inventories.map((inventory) => [inventory.product_id, inventory.quantity]));
+      if (productIds.length > 0) {
+        const sortedProductIds = Array.from(new Set(productIds)).sort((a, b) => a - b);
 
-      for (const [productId, required] of requiredPcsByProduct.entries()) {
-        const availableQty = inventoryMap.get(productId);
-        if (availableQty === undefined) {
-          throw new BadRequestException(`Inventory record missing for ${required.productName}`);
-        }
-        if (required.required > availableQty) {
-          throw new BadRequestException(
-            `${required.productName} exceeds current stock (${availableQty} PCS).`,
+        // Serialize edit checks for involved products so pending-reservation math stays consistent.
+        await tx.$queryRaw(
+          Prisma.sql`SELECT product_id FROM "Inventory" WHERE product_id IN (${Prisma.join(sortedProductIds)}) ORDER BY product_id FOR UPDATE`,
+        );
+
+        const inventories = await tx.inventory.findMany({
+          where: { product_id: { in: sortedProductIds } },
+          select: { product_id: true, quantity: true },
+        });
+        const inventoryMap = new Map(inventories.map((inventory) => [inventory.product_id, inventory.quantity]));
+
+        const productMap = new Map(
+          order.items.map((item) => [item.product_id, item.product]),
+        );
+
+        const pendingItems = await tx.orderItem.findMany({
+          where: {
+            product_id: { in: sortedProductIds },
+            order: {
+              status: OrderStatus.PENDING_ADMIN,
+              id: { not: orderId },
+            },
+          },
+          select: {
+            product_id: true,
+            quantity: true,
+            unit_type: true,
+          },
+        });
+
+        const pendingPiecesByProduct = new Map<number, number>();
+        for (const item of pendingItems) {
+          const product = productMap.get(item.product_id);
+          if (!product) {
+            continue;
+          }
+
+          let multiplier = 1;
+          if (item.unit_type === 'D') {
+            multiplier = Number(product.pcs_per_dozen);
+          } else if (item.unit_type === 'P') {
+            multiplier = Number(product.pcs_per_box);
+          }
+
+          const pendingPcs = item.quantity * multiplier;
+          pendingPiecesByProduct.set(
+            item.product_id,
+            (pendingPiecesByProduct.get(item.product_id) ?? 0) + pendingPcs,
           );
         }
+
+        for (const [productId, required] of requiredPcsByProduct.entries()) {
+          const inventoryQty = inventoryMap.get(productId);
+          if (inventoryQty === undefined) {
+            throw new BadRequestException(`Inventory record missing for ${required.productName}`);
+          }
+
+          const pendingQty = pendingPiecesByProduct.get(productId) ?? 0;
+          const availableBeforeConfirmation = Math.max(0, inventoryQty - pendingQty);
+
+          if (required.required > availableBeforeConfirmation) {
+            const insufficientStockMessage = user.role === Role.ADMIN
+              ? `${required.productName} exceeds available stock before confirmation (${availableBeforeConfirmation} PCS remaining).`
+              : `${required.productName} exceeds available stock before confirmation.`;
+
+            throw new BadRequestException(
+              insufficientStockMessage,
+            );
+          }
+        }
+      }
+
+      let newTotal = new Prisma.Decimal(0);
+      for (const item of order.items) {
+        const next = nextItemState.get(item.id);
+        if (!next) {
+          continue;
+        }
+
+        const quantityDecimal = new Prisma.Decimal(next.quantity);
+        const remainingBudget = this.maxAmount.minus(newTotal);
+
+        if (next.quantity > 0) {
+          const maxUnitPriceByRemainingTotal = remainingBudget.div(quantityDecimal);
+          if (next.unitPrice.gt(maxUnitPriceByRemainingTotal)) {
+            throw new BadRequestException(
+              `Price for ${next.productName} (${this.getUnitTypeLabel(next.unitType)}) is too high for quantity ${next.quantity}. Maximum allowed is ${maxUnitPriceByRemainingTotal.toFixed(2)} MMK.`,
+            );
+          }
+        }
+
+        const lineTotal = next.unitPrice.mul(quantityDecimal);
+        if (lineTotal.gt(remainingBudget)) {
+          throw new BadRequestException(`Line total for ${next.productName} exceeds maximum allowed order amount.`);
+        }
+
+        newTotal = newTotal.plus(lineTotal);
       }
 
       for (const entry of dto.items) {
@@ -478,20 +681,17 @@ export class OrdersService {
           data.quantity = entry.quantity;
         }
         if (entry.unit_price !== undefined) {
-          data.unit_price = new Prisma.Decimal(entry.unit_price);
+          const next = nextItemState.get(entry.id);
+          if (!next) {
+            throw new BadRequestException(`Order item ${entry.id} could not be recalculated`);
+          }
+          data.unit_price = next.unitPrice;
         }
         if (entry.unit_type !== undefined) {
           data.unit_type = entry.unit_type;
         }
         await tx.orderItem.update({ where: { id: entry.id }, data });
       }
-
-      // Recalculate total
-      const updatedItems = await tx.orderItem.findMany({ where: { order_id: orderId } });
-      const newTotal = updatedItems.reduce(
-        (sum, item) => sum.plus(new Prisma.Decimal(item.unit_price.toString()).mul(item.quantity)),
-        new Prisma.Decimal(0),
-      );
 
       return tx.order.update({
         where: { id: orderId },

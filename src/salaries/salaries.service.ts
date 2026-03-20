@@ -15,7 +15,9 @@ function startOfTodayLocal(): Date {
 
 @Injectable()
 export class SalariesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) { }
+
+  private readonly maxAmount = new Prisma.Decimal('9999999999.99');
 
   private parsePositiveAmount(rawAmount: string | undefined): Prisma.Decimal {
     const normalizedAmount = String(rawAmount ?? '').trim();
@@ -26,6 +28,9 @@ export class SalariesService {
     const amount = new Prisma.Decimal(normalizedAmount);
     if (amount.lte(0)) {
       throw new BadRequestException('Invalid amount: must be greater than 0');
+    }
+    if (amount.gt(this.maxAmount)) {
+      throw new BadRequestException(`Invalid amount: must not exceed ${this.maxAmount.toFixed(2)}`);
     }
 
     return amount;
@@ -87,8 +92,25 @@ export class SalariesService {
       (sum, b) => sum.plus(this.parsePositiveAmount(b.amount)),
       new Prisma.Decimal(0),
     );
+    if (totalBonusAmount.gt(this.maxAmount)) {
+      throw new BadRequestException(`Total bonus must not exceed ${this.maxAmount.toFixed(2)}`);
+    }
 
-    const netSalary = basicSalary.plus(totalBonusAmount);
+    const totalDeductionAmount = (dto.deductions ?? []).reduce(
+      (sum, d) => sum.plus(this.parsePositiveAmount(d.amount)),
+      new Prisma.Decimal(0),
+    );
+    if (totalDeductionAmount.gt(this.maxAmount)) {
+      throw new BadRequestException(`Total deduction must not exceed ${this.maxAmount.toFixed(2)}`);
+    }
+
+    const netSalary = basicSalary.plus(totalBonusAmount).minus(totalDeductionAmount);
+    if (netSalary.lt(0)) {
+      throw new BadRequestException('Total salary must be greater than or equal to 0');
+    }
+    if (netSalary.gt(this.maxAmount)) {
+      throw new BadRequestException(`Total salary must not exceed ${this.maxAmount.toFixed(2)}`);
+    }
     const paymentDate = parseLocalDate(dto.payment_date);
     const today = startOfTodayLocal();
     if (Number.isNaN(paymentDate.getTime()) || paymentDate.getTime() > today.getTime()) {
@@ -104,7 +126,7 @@ export class SalariesService {
           basic_salary: basicSalary,
           bonus_amount: totalBonusAmount,
           bonus_types: dto.bonuses ? (dto.bonuses as unknown as Prisma.JsonArray) : [],
-          deduction_amount: new Prisma.Decimal(0),
+          deduction_amount: totalDeductionAmount,
           net_salary: netSalary,
           payment_date: paymentDate,
           remark: dto.remark,

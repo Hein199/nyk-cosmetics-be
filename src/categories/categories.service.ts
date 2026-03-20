@@ -48,10 +48,29 @@ export class CategoriesService {
   }
 
   async remove(id: number) {
-    const category = await this.prisma.category.findUnique({ where: { id } });
-    if (!category) throw new NotFoundException('Category not found');
+    return this.prisma.$transaction(async (tx) => {
+      const category = await tx.category.findUnique({ where: { id } });
+      if (!category) {
+        throw new NotFoundException('Category not found');
+      }
 
-    await this.prisma.category.delete({ where: { id } });
-    return { success: true };
+      const productCount = await tx.product.count({
+        where: {
+          category: {
+            equals: category.name,
+            mode: 'insensitive',
+          },
+        },
+      });
+
+      if (productCount > 0) {
+        throw new ConflictException(
+          `Cannot delete category "${category.name}" because it is used by ${productCount} product${productCount > 1 ? 's' : ''}. Reassign products to another category first.`,
+        );
+      }
+
+      await tx.category.delete({ where: { id } });
+      return { success: true };
+    });
   }
 }
