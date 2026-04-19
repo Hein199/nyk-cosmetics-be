@@ -81,14 +81,17 @@ export class PaymentsService {
           },
         });
 
-        const newRemaining = remaining.minus(paymentAmount);
-        await tx.loan.update({
-          where: { id: loan.id },
-          data: {
-            remaining_amount: newRemaining,
-            status: newRemaining.isZero() ? LoanStatus.CLOSED : LoanStatus.OPEN,
-          },
-        });
+        // Only confirmed payments should affect loan balances.
+        if (isAdmin) {
+          const newRemaining = remaining.minus(paymentAmount);
+          await tx.loan.update({
+            where: { id: loan.id },
+            data: {
+              remaining_amount: newRemaining,
+              status: newRemaining.isZero() ? LoanStatus.CLOSED : LoanStatus.OPEN,
+            },
+          });
+        }
 
         // Admin payment: immediately create system ledger entry
         if (isAdmin) {
@@ -187,6 +190,48 @@ export class PaymentsService {
         throw new BadRequestException('Only pending payments can be confirmed');
       }
 
+      // Apply pending order payment to loan only at confirmation time.
+      if (payment.order_id) {
+        const loan = await tx.loan.findUnique({ where: { order_id: payment.order_id } });
+        if (!loan) {
+          throw new BadRequestException('No loan record found for this order');
+        }
+
+        const confirmedPayments = await tx.payment.aggregate({
+          _sum: { amount_paid: true },
+          where: {
+            order_id: payment.order_id,
+            status: PaymentStatus.CONFIRMED,
+            id: { not: payment.id },
+          },
+        });
+        const confirmedTotalBefore = new Prisma.Decimal(confirmedPayments._sum.amount_paid?.toString() ?? '0');
+        const original = new Prisma.Decimal(loan.original_amount.toString());
+        const expectedRemainingBefore = original.minus(confirmedTotalBefore);
+        const currentRemaining = new Prisma.Decimal(loan.remaining_amount.toString());
+        const expectedRemainingAfter = expectedRemainingBefore.minus(payment.amount_paid);
+
+        // New flow: pending payment has not reduced loan yet, so apply deduction now.
+        if (currentRemaining.equals(expectedRemainingBefore)) {
+          if (payment.amount_paid.greaterThan(currentRemaining)) {
+            throw new BadRequestException('Payment amount exceeds outstanding loan balance');
+          }
+
+          await tx.loan.update({
+            where: { id: loan.id },
+            data: {
+              remaining_amount: expectedRemainingAfter,
+              status: expectedRemainingAfter.isZero() ? LoanStatus.CLOSED : LoanStatus.OPEN,
+            },
+          });
+        } else if (currentRemaining.equals(expectedRemainingAfter)) {
+          // Legacy flow: payment amount was already deducted while still pending.
+          // Keep current loan balance to avoid double deduction.
+        } else {
+          throw new BadRequestException('Payment amount exceeds outstanding loan balance');
+        }
+      }
+
       const updatedPayment = await tx.payment.update({
         where: { id: paymentId },
         data: { status: PaymentStatus.CONFIRMED },
@@ -219,26 +264,37 @@ export class PaymentsService {
       throw new BadRequestException('Only pending payments can be rejected');
     }
 
-    // Restore the loan remaining amount when rejecting a payment
+    // Pending payments do not affect loan balances before admin confirmation.
     return this.prisma.$transaction(async (tx) => {
       const updatedPayment = await tx.payment.update({
         where: { id: paymentId },
         data: { status: PaymentStatus.REJECTED },
       });
 
-      // Restore the loan outstanding balance since the payment was never confirmed
+      // Legacy compatibility: restore balance only when older pending payments were already applied.
       if (payment.order_id) {
         const loan = await tx.loan.findUnique({ where: { order_id: payment.order_id } });
         if (loan) {
-          const restored = new Prisma.Decimal(loan.remaining_amount.toString()).plus(payment.amount_paid);
-          const total = new Prisma.Decimal(loan.original_amount.toString());
-          await tx.loan.update({
-            where: { id: loan.id },
-            data: {
-              remaining_amount: restored,
-              status: restored.greaterThan(0) && restored.lte(total) ? LoanStatus.OPEN : loan.status,
-            },
+          const confirmedPayments = await tx.payment.aggregate({
+            _sum: { amount_paid: true },
+            where: { order_id: payment.order_id, status: PaymentStatus.CONFIRMED },
           });
+          const confirmedTotal = new Prisma.Decimal(confirmedPayments._sum.amount_paid?.toString() ?? '0');
+          const original = new Prisma.Decimal(loan.original_amount.toString());
+          const expectedRemaining = original.minus(confirmedTotal);
+          const currentRemaining = new Prisma.Decimal(loan.remaining_amount.toString());
+
+          if (currentRemaining.lessThan(expectedRemaining)) {
+            const restored = currentRemaining.plus(payment.amount_paid);
+            const normalized = restored.greaterThan(expectedRemaining) ? expectedRemaining : restored;
+            await tx.loan.update({
+              where: { id: loan.id },
+              data: {
+                remaining_amount: normalized,
+                status: normalized.isZero() ? LoanStatus.CLOSED : LoanStatus.OPEN,
+              },
+            });
+          }
         }
       }
 
