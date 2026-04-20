@@ -3,6 +3,8 @@ import { LedgerCategory, LedgerType, Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateLedgerEntryDto } from './dto/create-ledger-entry.dto';
 
+const APP_TZ = 'Asia/Yangon';
+
 function parseLocalDate(dateStr: string): Date {
   const [year, month, day] = dateStr.split('-').map(Number);
   return new Date(year, month - 1, day);
@@ -13,17 +15,53 @@ function startOfTodayLocal(): Date {
   return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
-function parseAndValidateEntryDate(entryDate: string): Date {
-  const parsedDate = parseLocalDate(entryDate);
-  if (Number.isNaN(parsedDate.getTime())) {
+function toTimezoneDateStr(date: Date, timeZone: string): string {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+
+  const year = parts.find((part) => part.type === 'year')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  const day = parts.find((part) => part.type === 'day')?.value;
+
+  if (!year || !month || !day) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  return `${year}-${month}-${day}`;
+}
+
+function normalizeEntryDateInput(entryDate: string): { dateStr: string; dateValue: Date } {
+  const dateStr = String(entryDate ?? '').trim().slice(0, 10);
+  const [year, month, day] = dateStr.split('-').map(Number);
+
+  if (!year || !month || !day) {
     throw new BadRequestException('Invalid entry date');
   }
 
-  if (parsedDate.getTime() > startOfTodayLocal().getTime()) {
+  // Store at UTC noon to prevent timezone conversion from shifting the calendar day.
+  const dateValue = new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
+  if (Number.isNaN(dateValue.getTime())) {
+    throw new BadRequestException('Invalid entry date');
+  }
+
+  return { dateStr, dateValue };
+}
+
+function parseAndValidateEntryDate(entryDate: string): Date {
+  const normalized = normalizeEntryDateInput(entryDate);
+  const todayInAppTz = toTimezoneDateStr(new Date(), APP_TZ);
+  if (normalized.dateStr > todayInAppTz) {
     throw new BadRequestException('Date cannot be in the future');
   }
 
-  return parsedDate;
+  return normalized.dateValue;
 }
 
 function parseAndValidateAmount(rawAmount: string): Prisma.Decimal {
@@ -143,6 +181,7 @@ export class LedgerService {
 
     const enriched = entries.map((e) => {
       const isManual = e.reference_id === 0;
+      const entryCreatedAt = (e as { created_at?: Date }).created_at ?? e.entry_date;
       let reference_label: string | null = null;
       let entry_source: 'system' | 'manual' = isManual ? 'manual' : 'system';
 
@@ -168,16 +207,16 @@ export class LedgerService {
         ...e,
         display_date:
           !isManual &&
-          (e.category === LedgerCategory.SALE || e.category === LedgerCategory.OTHER_INCOME)
-            ? paymentMap.get(e.reference_id)?.created_at ?? e.entry_date
+            (e.category === LedgerCategory.SALE || e.category === LedgerCategory.OTHER_INCOME)
+            ? paymentMap.get(e.reference_id)?.created_at ?? entryCreatedAt
             : e.entry_date,
         sort_datetime:
           !isManual &&
-          (e.category === LedgerCategory.SALE || e.category === LedgerCategory.OTHER_INCOME)
-            ? paymentMap.get(e.reference_id)?.created_at ?? e.entry_date
+            (e.category === LedgerCategory.SALE || e.category === LedgerCategory.OTHER_INCOME)
+            ? paymentMap.get(e.reference_id)?.created_at ?? entryCreatedAt
             : !isManual && (e.category === LedgerCategory.EXPENSE || e.category === LedgerCategory.SALARY)
-              ? expenseMap.get(e.reference_id)?.created_at ?? e.entry_date
-              : e.entry_date,
+              ? expenseMap.get(e.reference_id)?.created_at ?? entryCreatedAt
+              : entryCreatedAt,
         reference_label,
         entry_source,
       };
