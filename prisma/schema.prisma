@@ -232,6 +232,7 @@ model Loan {
 model LedgerEntry {
   id                 Int            @id @default(autoincrement())
   entry_date         DateTime       @db.Date
+  created_at         DateTime       @default(now())
   type               LedgerType
   category           LedgerCategory
   reference_id       Int
@@ -240,6 +241,7 @@ model LedgerEntry {
   is_system_generated Boolean       @default(false)
 
   @@index([entry_date])
+  @@index([created_at])
   @@index([type])
   @@index([category])
 }
